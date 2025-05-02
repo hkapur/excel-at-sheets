@@ -3,15 +3,16 @@ document.addEventListener("DOMContentLoaded", function () {
   const questionInput = document.getElementById("question");
   const typing = document.getElementById("typing");
   const loader = document.getElementById("loader");
+  const chatBox = document.getElementById("chat");
 
   if (chatForm) {
-    // Handle Send button or form submit
+    // Show loader and hide typing on form submission
     chatForm.addEventListener("submit", function () {
       if (typing) typing.style.display = "none";
       if (loader) loader.style.display = "block";
     });
 
-    // Handle Enter to submit
+    // Submit form on Enter key press (but allow Shift+Enter for newline)
     questionInput.addEventListener("keydown", function (event) {
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
@@ -20,5 +21,10 @@ document.addEventListener("DOMContentLoaded", function () {
         chatForm.submit();
       }
     });
+  }
+
+  // Optional: Scroll to latest message on load
+  if (chatBox) {
+    chatBox.scrollTop = chatBox.scrollHeight;
   }
 });

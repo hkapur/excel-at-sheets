@@ -3,21 +3,23 @@ import re
 import tempfile
 import openpyxl
 from flask import Flask, request, render_template, redirect, url_for, session
-from markupsafe import Markup
 from dotenv import load_dotenv
+from markupsafe import Markup
+from markdown import markdown
+
+# LangChain
 from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
-from markdown import markdown
 
 load_dotenv()
 app = Flask(__name__)
 app.secret_key = "spreadsheet-bot"
 
-# Register markdown filter
+# Enable markdown rendering
 app.jinja_env.filters['markdown'] = lambda text: Markup(markdown(text, extensions=["fenced_code", "tables"]))
 
-# Initialize OpenAI LLM
-llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
+# OpenAI model setup via LangChain
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3)
 
 @app.route("/", methods=["GET", "POST"])
 def upload_file():
@@ -29,7 +31,6 @@ def upload_file():
             session["file_path"] = temp_path
             session["chat_history"] = []
             return redirect(url_for("chat"))
-
     return render_template("index.html", file_uploaded=False)
 
 @app.route("/chat", methods=["GET", "POST"])
@@ -42,7 +43,6 @@ def chat():
         return redirect(url_for("upload_file"))
 
     wb = openpyxl.load_workbook(file_path)
-    ws = wb.active
 
     if request.method == "POST":
         user_input = request.form["question"].strip()
@@ -50,14 +50,14 @@ def chat():
 
         if is_cell_reference(user_input):
             cell = extract_cell(user_input)
-            val = ws[cell].value
+            val = get_cell_value_across_sheets(wb, cell)
             if isinstance(val, str) and val.startswith("="):
                 explanation = explain_formula(val)
-                explanation += "\n\n" + build_formula_chain(ws, val)
+                explanation += "\n\n" + build_formula_chain(wb, val)
             else:
                 explanation = f"**Cell {cell} contains:** `{val}`"
         else:
-            table_text = extract_table_data(ws)
+            table_text = extract_table_data_all_sheets(wb)
             explanation = ask_about_spreadsheet(table_text, user_input)
 
         chat_history.append({"role": "bot", "content": explanation})
@@ -68,14 +68,15 @@ def chat():
 # ========== LangChain Helpers ==========
 
 def ask_about_spreadsheet(table_text, user_question):
-    system = "You are a helpful assistant that analyzes spreadsheet tables and answers user questions clearly."
+    system = "You are a helpful assistant that analyzes spreadsheets with multiple sheets and answers clearly."
     user = f"""
-Please answer the user's question using bullet points and markdown formatting.
+Use bullet points and markdown formatting in your response.
 
-**Spreadsheet:**
+**Spreadsheet content:**
+
 {table_text}
 
-**Question:** {user_question}
+**User question:** {user_question}
 """
     try:
         response = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)])
@@ -84,21 +85,55 @@ Please answer the user's question using bullet points and markdown formatting.
         return f"Error: {str(e)}"
 
 def explain_formula(formula):
-    system = "You are a helpful assistant who explains Excel formulas step-by-step using markdown and bullet points."
-    user = f"Explain what this Excel formula does:\n\n`{formula}`"
+    system = "You are a helpful assistant who explains Excel formulas step-by-step using markdown."
+    user = f"Explain this Excel formula:\n\n`{formula}`"
     try:
         response = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)])
         return response.content
     except Exception as e:
         return f"Error: {str(e)}"
 
-# ========== Local Helpers ==========
+# ========== Spreadsheet Helpers ==========
 
-def extract_table_data(ws, max_rows=30, max_cols=10):
-    data = []
-    for row in ws.iter_rows(min_row=1, max_row=max_rows, max_col=max_cols, values_only=True):
-        data.append("\t".join(str(cell) if cell is not None else "" for cell in row))
-    return "\n".join(data)
+def extract_table_data_all_sheets(wb, max_rows=30, max_cols=10):
+    all_data = []
+    for sheet in wb.sheetnames:
+        ws = wb[sheet]
+        all_data.append(f"### Sheet: {sheet}")
+        for row in ws.iter_rows(min_row=1, max_row=max_rows, max_col=max_cols, values_only=True):
+            row_text = "\t".join(str(cell) if cell is not None else "" for cell in row)
+            all_data.append(row_text)
+        all_data.append("")  # spacing between sheets
+    return "\n".join(all_data)
+
+def get_cell_value_across_sheets(wb, cell):
+    for sheet in wb.sheetnames:
+        ws = wb[sheet]
+        try:
+            val = ws[cell].value
+            if val is not None:
+                return val
+        except:
+            continue
+    return "(not found in any sheet)"
+
+def build_formula_chain(wb, formula):
+    refs = re.findall(r'\b[A-Z]{1,2}[0-9]{1,4}\b', formula)
+    if not refs:
+        return ""
+    parts = ["\n**Referenced cells:**"]
+    for sheet in wb.sheetnames:
+        ws = wb[sheet]
+        for ref in refs:
+            try:
+                val = ws[ref].value
+                if val is not None:
+                    parts.append(f"- `{ref}` in *{sheet}* = `{val}`")
+            except:
+                continue
+    return "\n".join(parts)
+
+# ========== Utility Helpers ==========
 
 def extract_cell(text):
     match = re.search(r"\b([A-Z]{1,2}[0-9]{1,4})\b", text.upper())
@@ -106,19 +141,6 @@ def extract_cell(text):
 
 def is_cell_reference(text):
     return bool(re.search(r"\b([A-Z]{1,2}[0-9]{1,4})\b", text.upper()))
-
-def build_formula_chain(ws, formula):
-    refs = re.findall(r'\b[A-Z]{1,2}[0-9]{1,4}\b', formula)
-    if not refs:
-        return ""
-    parts = ["\n**Referenced cells:**"]
-    for ref in refs:
-        try:
-            val = ws[ref].value
-            parts.append(f"- `{ref}` = `{val}`")
-        except:
-            parts.append(f"- `{ref}` = (unavailable)")
-    return "\n".join(parts)
 
 if __name__ == "__main__":
     app.run(debug=True)
