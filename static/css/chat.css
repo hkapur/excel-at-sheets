@@ -99,3 +99,17 @@ body {
   color: #eee; /* Slightly brighter for filename */
 }
 /* --- End Current File Info Styling --- */
+/* --- Upload Overlay Spinner Styling --- */
+.upload-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(18, 18, 18, 0.8); /* semi-transparent dark veil */
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 12px;
+}

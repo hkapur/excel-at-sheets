@@ -22,30 +22,45 @@
     </div>
     {% endif %}
 
-    <div class="row mb-4">
-      <!-- Upload Form (Excel) -->
-      <div class="col-md-6 mb-4 mb-md-0">
-        <form id="uploadForm" method="post" enctype="multipart/form-data" action="/">
-          <div class="mb-3">
-            <label for="file" class="form-label">Upload New Excel File (.xlsx)</label>
-            <input type="file" class="form-control bg-white text-dark" id="file" name="file" required>
-          </div>
-          <button type="submit" class="btn btn-secondary w-100">📁 Upload Excel</button>
-        </form>
+    <!-- 🔁 Wrapped upload section with overlay support -->
+    <div class="position-relative" id="upload-section-wrapper">
+      <div class="row mb-4" id="upload-section">
+        <!-- Upload Form (Excel) -->
+        <div class="col-md-6 mb-4 mb-md-0">
+          <form id="uploadForm" method="post" enctype="multipart/form-data" action="/">
+            <div class="mb-3">
+              <label for="file" class="form-label">Upload New Excel File (.xlsx)</label>
+              <input type="file" class="form-control bg-white text-dark" id="file" name="file" required>
+            </div>
+            <button type="submit" class="btn btn-secondary w-100">📁 Upload Excel</button>
+          </form>
+        </div>
+        <!-- PDF Receipt Upload Form -->
+        <div class="col-md-6">
+          <form id="receiptUploadForm" method="post" enctype="multipart/form-data" action="/process_receipt">
+            <div class="mb-3">
+              <label for="receipt_file" class="form-label">Upload PDF Receipt (.pdf)</label>
+              <input type="file" class="form-control bg-white text-dark" id="receipt_file" name="receipt_file" accept="application/pdf" required>
+            </div>
+            <button type="submit" class="btn btn-secondary w-100">📄 Process Receipt</button>
+          </form>
+        </div>
       </div>
-      <!-- PDF Receipt Upload Form -->
-      <div class="col-md-6">
-        <form id="receiptUploadForm" method="post" enctype="multipart/form-data" action="/process_receipt">
-          <div class="mb-3">
-            <label for="receipt_file" class="form-label">Upload PDF Receipt (.pdf)</label>
-            <input type="file" class="form-control bg-white text-dark" id="receipt_file" name="receipt_file" accept="application/pdf" required>
-          </div>
-          <button type="submit" class="btn btn-secondary w-100">📄 Process Receipt</button>
-        </form>
+
+      <!-- 🚀 Overlay Spinner -->
+      <div id="upload-overlay" class="upload-overlay" style="display: none;">
+        <div class="spinner-border text-light" role="status"></div>
       </div>
     </div>
 
     {% if file_uploaded %}
+    <!-- 📣 Flash Message -->
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="alert alert-info mt-3">{{ messages[0] }}</div>
+      {% endif %}
+    {% endwith %}
+
     <!-- Chat Interface -->
     <div class="chat-box mb-3" id="chat">
       {% for message in chat_history %}
@@ -64,7 +79,7 @@
       <p class="mt-2">Analyzing your question, please wait for the response...</p>
     </div>
 
-    <!-- Suggested Prompts -->
+    <!-- Suggested Prompts + Clear Button -->
     <div class="suggested-prompts mb-3">
       <button class="btn btn-outline-light btn-sm me-2 mb-2" data-prompt="Generate Analysis Report">Generate Analysis Report</button>
 
@@ -75,6 +90,11 @@
       <a href="{{ url_for('download_report') }}" class="btn btn-outline-success btn-sm mb-2 ms-auto" role="button" target="_blank">
         Download Last Report (PDF)
       </a>
+
+      <!-- 🧹 Clear Chat Form -->
+      <form method="post" action="/clear_chat" style="display:inline;" onsubmit="return confirm('Are you sure you want to clear all chat messages?');">
+        <button class="btn btn-outline-danger btn-sm mb-2 ms-2" type="submit">🧹 Clear Chat</button>
+      </form>
     </div>
 
     <!-- Chat Input Form -->
@@ -89,6 +109,19 @@
 
   <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Loader persist on redirect -->
+  <script>
+    if (window.sessionStorage.getItem("showLoader") === "true") {
+      document.addEventListener("DOMContentLoaded", function () {
+        const loader = document.getElementById("loader");
+        const overlay = document.getElementById("upload-overlay");
+        if (loader) loader.style.display = "block";
+        if (overlay) overlay.style.display = "flex";
+        window.sessionStorage.removeItem("showLoader");
+      });
+    }
+  </script>
 
   <!-- Custom JS -->
   <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
