@@ -76,7 +76,7 @@ def explain_formula(formula):
         return f"Error: {str(e)}"
 
 def get_column_summary(df):
-    """Creates a text summary of DataFrame columns for the LLM."""
+    """Creates a text summary of DataFrame columns for the LLM, including basic stats for numeric columns."""
     if df is None or df.empty:
         return "The spreadsheet is empty or could not be read."
     
@@ -84,11 +84,32 @@ def get_column_summary(df):
     for col in df.columns:
         dtype = str(df[col].dtype)
         line = f"- '{col}' (Type: {dtype})"
+        
         # Add unique count for potential categorical columns
         if dtype in ['object', 'category']:
-            num_unique = df[col].nunique()
-            line += f" ({num_unique} unique values)"
+            # Also check for boolean type which might be treated as object sometimes
+            is_bool_like = df[col].nunique() == 2 and df[col].dropna().isin([0, 1, True, False]).all()
+            if is_bool_like:
+                 line += f" (Boolean-like: {df[col].unique().tolist()})" # Show the two values
+            else:
+                num_unique = df[col].nunique()
+                line += f" ({num_unique} unique values)"
+                # Show some sample values if cardinality is low
+                if num_unique < 10:
+                    sample_values = df[col].dropna().unique()[:5]
+                    line += f" Samples: [{ ', '.join(map(str, sample_values)) }]"
+                    
+        # Add basic stats for numeric columns
+        elif pd.api.types.is_numeric_dtype(df[col]):
+            stats = df[col].describe()
+            min_val = stats.get('min', 'N/A')
+            max_val = stats.get('max', 'N/A')
+            mean_val = stats.get('mean', 'N/A')
+            line += f" (Min: {min_val:.2f}, Max: {max_val:.2f}, Mean: {mean_val:.2f})" if pd.notna(min_val) else " (Numeric)"
+            
         summary_lines.append(line)
+        
+    print("--- Generated Column Summary for LLM --- \n" + "\n".join(summary_lines) + "\n-------------------------------------")
     return "\n".join(summary_lines)
 
 def generate_analysis_report(df, table_text):
@@ -146,21 +167,28 @@ def decide_chart_request(df):
         
     column_summary = get_column_summary(df)
 
-    system = f'''You are a data visualization expert. Based on the following column summary, decide the single most appropriate chart type (bar, histogram, scatter) to visualize a key aspect of the data, OR decide 'None' if no single chart is significantly meaningful or possible.
+    # Refined prompt
+    system = f'''You are a data visualization expert. Based on the column summary, decide if a **single meaningful chart** (bar, histogram, scatter) can effectively visualize a key aspect or distribution within the data.
+
+**Guidelines:**
+- Use `histogram` for visualizing the distribution of a numerical column (like age, duration, price).
+- Use `bar` for showing counts of distinct categories or boolean values (like status, type, escalated/not escalated).
+- Use `scatter` *only* if there are two numerical columns that might show a correlation.
+- If no single chart provides significant insight or if data types are unsuitable, choose 'none'.
 
 **Instructions:**
-1. Analyze the columns, types, and unique value counts.
-2. **CRITICAL:** Use the `register_chart_request` tool to register your decision. Provide the arguments `chart_type`, `column1`, and `column2` (if applicable) based on your analysis.
+1. Analyze the columns, types, stats, and unique value counts.
+2. **CRITICAL:** Use the `register_chart_request` tool to register your decision. Provide `chart_type`, `column1`, and `column2` (if applicable).
    - For `bar` or `histogram`, specify `column1`.
-   - For `scatter`, specify both `column1` and `column2`.
-   - For `none`, specify `chart_type` as `none` and leave columns as `None`.
+   - For `scatter`, specify `column1` and `column2`.
+   - For `none`, set `chart_type` to `none`.
 Do NOT generate any other text output, only make the tool call.'''
 
     user = f'''
 **Column Summary:**
 {column_summary}
 
-**Use the `register_chart_request` tool to specify the best chart based on this summary.**
+**Use the `register_chart_request` tool to specify the best chart based on this summary, or 'none' if no single chart is clearly insightful.**
 '''
 
     try:
@@ -823,6 +851,7 @@ def generate_financial_analysis(categorized_data, period_str, total_spent_str, n
         # --- New Structured Prompt ---
         system_prompt = """You are a financial analyst assistant. 
 Analyze the user's spending based on the provided summary. 
+
 A transaction table and a pie chart visualizing these categories are also shown to the user separately.
 
 Generate a response strictly following this structure:
