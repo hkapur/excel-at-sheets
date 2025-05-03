@@ -22,8 +22,7 @@ from helpers import (
     generate_report_pdf,
     generate_dynamic_prompts,
     decide_chart_request,
-    _plot_bar, _plot_histogram, _plot_scatter,
-    generate_plot_ideas
+    _plot_bar, _plot_histogram, _plot_scatter
 )
 
 load_dotenv()
@@ -212,10 +211,6 @@ def chat():
     original_filename = session.get("original_filename") # Get filename from session
     dynamic_prompts = []
     
-    # Clear plot ideas from session on page refresh
-    if "plot_ideas" in session:
-        session.pop("plot_ideas", None)
-    
     try:
         # Generate dynamic prompts based on the data for GET requests
         df, _ = extract_table_data_all_sheets(file_path)
@@ -291,49 +286,6 @@ def download_report():
     else:
         print("Download Error: PDF generation failed.")
         return "Error generating PDF.", 500
-
-@app.route("/get_plot_ideas")
-def get_plot_ideas():
-    """Returns three interactive plot ideas based on the uploaded file."""
-    file_path = session.get("file_path")
-    
-    if not file_path or not os.path.exists(file_path):
-        return redirect(url_for("upload_file"))
-    
-    try:
-        df, _ = extract_table_data_all_sheets(file_path)
-        plot_ideas = generate_plot_ideas(df)
-        session["plot_ideas"] = plot_ideas
-        return redirect(url_for("chat"))
-    except Exception as e:
-        print(f"Error generating plot ideas: {e}")
-        session["plot_ideas"] = [
-            {"title": "Basic Chart", "description": "Simple visualization of your data"},
-            {"title": "Data Analysis", "description": "Explore patterns in your dataset"},
-            {"title": "Visual Insights", "description": "Get visual understanding of key metrics"}
-        ]
-        return redirect(url_for("chat"))
-
-@app.route("/get_plot_ideas_ajax")
-def get_plot_ideas_ajax():
-    """AJAX endpoint that returns three interactive plot ideas based on the uploaded file."""
-    file_path = session.get("file_path")
-    
-    if not file_path or not os.path.exists(file_path):
-        return jsonify({"error": "No file uploaded"}), 400
-    
-    try:
-        df, _ = extract_table_data_all_sheets(file_path)
-        plot_ideas = generate_plot_ideas(df)
-        return jsonify({"plot_ideas": plot_ideas})
-    except Exception as e:
-        print(f"Error generating plot ideas: {e}")
-        fallback_ideas = [
-            {"title": "Basic Chart", "description": "Simple visualization of your data"},
-            {"title": "Data Analysis", "description": "Explore patterns in your dataset"},
-            {"title": "Visual Insights", "description": "Get visual understanding of key metrics"}
-        ]
-        return jsonify({"plot_ideas": fallback_ideas})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5018)))
