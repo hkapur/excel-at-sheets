@@ -14,6 +14,7 @@ body {
   border-radius: 12px;
   height: 500px;
   overflow-y: auto;
+  scroll-behavior: smooth;
 }
 
 .bubble {
@@ -64,8 +65,8 @@ body {
 /* --- Suggested Prompts Styling --- */
 .suggested-prompts {
   display: flex;
-  flex-wrap: wrap; /* Allow buttons to wrap to next line */
-  justify-content: flex-start; /* Align buttons to the start */
+  flex-wrap: wrap;
+  justify-content: flex-start;
   padding: 5px 0;
 }
 
@@ -76,18 +77,18 @@ body {
 }
 
 .suggested-prompts button:hover {
-  background-color: #3a3a3a; /* Slightly lighter background on hover */
+  background-color: #3a3a3a;
 }
 /* --- End Suggested Prompts Styling --- */
 
 /* --- Current File Info Styling --- */
 .current-file-info {
-  background-color: #2c2c2c; /* Similar to bot bubble */
+  background-color: #2c2c2c;
   padding: 8px 15px;
   border-radius: 8px;
   font-size: 0.9rem;
-  color: #ccc; /* Lighter text */
-  display: inline-block; /* Don't take full width */
+  color: #ccc;
+  display: inline-block;
   max-width: 100%;
 }
 
@@ -96,9 +97,10 @@ body {
 }
 
 .current-file-info .filename strong {
-  color: #eee; /* Slightly brighter for filename */
+  color: #eee;
 }
 /* --- End Current File Info Styling --- */
+
 /* --- Upload Overlay Spinner Styling --- */
 .upload-overlay {
   position: absolute;
@@ -106,10 +108,55 @@ body {
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(18, 18, 18, 0.8); /* semi-transparent dark veil */
+  background-color: rgba(18, 18, 18, 0.8);
   z-index: 10;
   display: flex;
   justify-content: center;
   align-items: center;
   border-radius: 12px;
 }
+/* --- End Upload Overlay Spinner Styling --- */
+
+/* --- Plot Ideas Styling --- */
+.plot-ideas {
+  background-color: #2d2d3d;
+  padding: 10px 15px;
+  border-radius: 10px;
+  margin-top: 10px;
+}
+
+.plot-ideas h6 {
+  color: #ddd;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+.plot-ideas button {
+  background-color: transparent;
+  border-color: #ffc107;
+  color: #ffc107;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.plot-ideas button:hover {
+  background-color: #ffc107;
+  color: #212529;
+}
+
+.plot-idea-card {
+  background-color: #252538;
+  border-radius: 8px;
+  padding: 10px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.plot-description {
+  color: #bbb;
+  font-size: 0.8rem;
+  margin-bottom: 0;
+  line-height: 1.4;
+}
+/* --- End Plot Ideas Styling --- */

@@ -22,10 +22,10 @@
     </div>
     {% endif %}
 
-    <!-- 🔁 Wrapped upload section with overlay support -->
+    <!-- Upload Section with Overlay -->
     <div class="position-relative" id="upload-section-wrapper">
       <div class="row mb-4" id="upload-section">
-        <!-- Upload Form (Excel) -->
+        <!-- Excel Upload -->
         <div class="col-md-6 mb-4 mb-md-0">
           <form id="uploadForm" method="post" enctype="multipart/form-data" action="/">
             <div class="mb-3">
@@ -35,7 +35,7 @@
             <button type="submit" class="btn btn-secondary w-100">📁 Upload Excel</button>
           </form>
         </div>
-        <!-- PDF Receipt Upload Form -->
+        <!-- PDF Receipt Upload -->
         <div class="col-md-6">
           <form id="receiptUploadForm" method="post" enctype="multipart/form-data" action="/process_receipt">
             <div class="mb-3">
@@ -47,14 +47,14 @@
         </div>
       </div>
 
-      <!-- 🚀 Overlay Spinner -->
+      <!-- Overlay Spinner -->
       <div id="upload-overlay" class="upload-overlay" style="display: none;">
         <div class="spinner-border text-light" role="status"></div>
       </div>
     </div>
 
     {% if file_uploaded %}
-    <!-- 📣 Flash Message -->
+    <!-- Flash Message -->
     {% with messages = get_flashed_messages() %}
       {% if messages %}
         <div class="alert alert-info mt-3">{{ messages[0] }}</div>
@@ -71,7 +71,7 @@
       <div id="typing" class="bubble typing bot" style="display: none;">Typing...</div>
     </div>
 
-    <!-- Loading Spinner -->
+    <!-- Loader -->
     <div id="loader" class="text-center mt-3" style="display: none;">
       <div class="spinner-border text-light" role="status">
         <span class="visually-hidden">Loading...</span>
@@ -79,7 +79,7 @@
       <p class="mt-2">Analyzing your question, please wait for the response...</p>
     </div>
 
-    <!-- Suggested Prompts + Clear Button -->
+    <!-- Suggested Prompts and Controls -->
     <div class="suggested-prompts mb-3">
       <button class="btn btn-outline-light btn-sm me-2 mb-2" data-prompt="Generate Analysis Report">Generate Analysis Report</button>
 
@@ -87,17 +87,46 @@
       <button class="btn btn-outline-light btn-sm me-2 mb-2" data-prompt="{{ prompt }}">{{ prompt }}</button>
       {% endfor %}
 
-      <a href="{{ url_for('download_report') }}" class="btn btn-outline-success btn-sm mb-2 ms-auto" role="button" target="_blank">
-        Download Last Report (PDF)
-      </a>
+      <div class="float-end">
+        <button id="plotIdeasBtn" class="btn btn-outline-primary btn-sm mb-2 me-2">Get Interactive Plots</button>
+        <a href="{{ url_for('download_report') }}" class="btn btn-outline-success btn-sm mb-2" target="_blank">Download Last Report (PDF)</a>
 
-      <!-- 🧹 Clear Chat Form -->
-      <form method="post" action="/clear_chat" style="display:inline;" onsubmit="return confirm('Are you sure you want to clear all chat messages?');">
-        <button class="btn btn-outline-danger btn-sm mb-2 ms-2" type="submit">🧹 Clear Chat</button>
-      </form>
+        <!-- Clear Chat -->
+        <form method="post" action="/clear_chat" style="display:inline;" onsubmit="return confirm('Are you sure you want to clear all chat messages?');">
+          <button class="btn btn-outline-danger btn-sm mb-2 ms-2" type="submit">🧹 Clear Chat</button>
+        </form>
+      </div>
     </div>
 
-    <!-- Chat Input Form -->
+    <!-- Plot Ideas Loader -->
+    <div id="plotIdeasLoader" class="text-center mt-3 mb-3" style="display: none;">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading plot ideas...</span>
+      </div>
+      <p class="mt-2">Generating plot ideas based on your data...</p>
+    </div>
+
+    <!-- Plot Ideas Container (for dynamic injection) -->
+    <div id="plotIdeasContainer" class="mb-3" style="display: none;"></div>
+
+    <!-- Static Plot Ideas -->
+    {% if session.get('plot_ideas') %}
+    <div class="plot-ideas mb-3">
+      <h6>Interactive Plot Ideas:</h6>
+      <div class="row">
+        {% for idea in session.get('plot_ideas') %}
+        <div class="col-md-4 mb-3">
+          <div class="plot-idea-card">
+            <button class="btn btn-outline-warning btn-sm w-100 mb-2">{{ idea.title }}</button>
+            <p class="plot-description">{{ idea.description }}</p>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Chat Input -->
     <form id="chatForm" method="post" action="{{ url_for('chat') }}">
       <div class="input-group mb-3">
         <input type="text" class="form-control" id="question" name="question" placeholder="Ask about a sheet or cell... or use a suggestion above" required>
@@ -107,10 +136,10 @@
     {% endif %}
   </div>
 
-  <!-- Bootstrap JS -->
+  <!-- Bootstrap Bundle -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-  <!-- Loader persist on redirect -->
+  <!-- Loader on Redirect -->
   <script>
     if (window.sessionStorage.getItem("showLoader") === "true") {
       document.addEventListener("DOMContentLoaded", function () {
