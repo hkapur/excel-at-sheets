@@ -17,12 +17,12 @@
 
     {% if file_uploaded and filename %}
     <div class="current-file-info mb-3">
-      <span class="file-icon">📄</span> 
+      <span class="file-icon">📄</span>
       <span class="filename">Currently analyzing: <strong>{{ filename }}</strong></span>
     </div>
     {% endif %}
 
-    <!-- Upload Form -->
+    <!-- Upload Form (Excel) -->
     <form id="uploadForm" method="post" enctype="multipart/form-data" action="/" class="mb-4">
       <div class="mb-3">
         <label for="file" class="form-label">Upload New Excel File (.xlsx)</label>
@@ -61,15 +61,12 @@
 
     <!-- Suggested Prompts -->
     <div class="suggested-prompts mb-3">
-      {# Static Report Prompt #}
       <button class="btn btn-outline-light btn-sm me-2 mb-2" data-prompt="Generate Analysis Report">Generate Analysis Report</button>
-      
-      {# Dynamic Prompts #}
+
       {% for prompt in dynamic_prompts %}
       <button class="btn btn-outline-light btn-sm me-2 mb-2" data-prompt="{{ prompt }}">{{ prompt }}</button>
       {% endfor %}
-      
-      {# Download Button (Keep at the end) #}
+
       <a href="{{ url_for('download_report') }}" class="btn btn-outline-success btn-sm mb-2 ms-auto" role="button" target="_blank">
         Download Last Report (PDF)
       </a>
@@ -82,11 +79,6 @@
         <button class="btn btn-primary" type="submit">Send</button>
       </div>
     </form>
-
-    <!-- Generate Report Form (REMOVED) -->
-    {# <form id="reportForm" method="post" action="{{ url_for('generate_report') }}">
-      <button class="btn btn-secondary w-100" type="submit">Generate Analysis Report</button>
-    </form> #}
     {% endif %}
   </div>
 

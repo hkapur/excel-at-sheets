@@ -600,3 +600,85 @@ def _plot_scatter(df, col1_name, col2_name, chart_path):
     except Exception as e:
         print(f"Plot Error (Scatter): {e}")
         return False
+
+# ========= Receipt Analysis Helpers ==========
+
+def categorize_receipts(receipts):
+    """Uses LLM to assign a category to each receipt based on vendor."""
+    system = "You are an expense categorization assistant."
+    user = "Categorize each receipt into a spending category. Common categories: Food, Transport, Shopping, Utilities, Entertainment, Other.\n\n"
+    user += "Return the result as JSON list with: vendor, total, category.\n\n"
+
+    for r in receipts:
+        user += f"- Vendor: {r['vendor']}, Total: {r['total']}\n"
+
+    example = """
+Example Output:
+[
+  {"vendor": "Starbucks", "total": 12.5, "category": "Food"},
+  {"vendor": "Amazon", "total": 59.99, "category": "Shopping"}
+]
+"""
+    try:
+        from langchain.schema import SystemMessage, HumanMessage
+        response = llm.invoke([SystemMessage(content=system), HumanMessage(content=user + example)])
+
+        print("--- LLM raw output ---")
+        print(repr(response.content))
+        print("-----------------------")
+
+        # Strip Markdown code block
+        cleaned = response.content.strip()
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[len("```json"):].strip()
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3].strip()
+
+        import json
+        return json.loads(cleaned)
+    except Exception as e:
+        print(f"Error categorizing receipts: {e}")
+        return []
+
+def plot_expense_pie_chart(categorized_data, save_path):
+    """Generates a pie chart of expenses grouped by category."""
+    import pandas as pd
+    import matplotlib.pyplot as plt
+
+    try:
+        df = pd.DataFrame(categorized_data)
+        grouped = df.groupby("category")["total"].sum()
+
+        plt.figure(figsize=(8, 6))
+        grouped.plot.pie(autopct='%1.1f%%', startangle=90)
+        plt.title("Expenses by Category")
+        plt.ylabel("")
+        plt.tight_layout()
+        plt.savefig(save_path)
+        plt.close()
+        print(f"Pie chart saved to {save_path}")
+        return True
+    except Exception as e:
+        print(f"Error generating pie chart: {e}")
+        return False
+
+def generate_expense_summary(categorized_data):
+    """LLM generates a summary of user's expenses by category."""
+    import pandas as pd
+    df = pd.DataFrame(categorized_data)
+    category_totals = df.groupby("category")["total"].sum().to_dict()
+
+    user = f"""
+Below are total expenses per category:
+
+{category_totals}
+
+Write a short summary of the user's spending pattern. Be concise and professional.
+"""
+    try:
+        from langchain.schema import SystemMessage, HumanMessage
+        response = llm.invoke([SystemMessage(content="You are an expense report assistant."), HumanMessage(content=user)])
+        return response.content.strip()
+    except Exception as e:
+        print(f"Error generating summary: {e}")
+        return "Error generating summary."
