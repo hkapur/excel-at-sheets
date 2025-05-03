@@ -471,63 +471,135 @@ def _plot_scatter(df, col1_name, col2_name, chart_path):
 def generate_plot_ideas(df):
     """
     Uses LLM to generate three interactive plot ideas based on the uploaded xlsx file
-    Returns a list of plot idea names
+    Returns a list of dictionaries with 'title' and 'description' for each plot idea
     """
     if df is None or df.empty:
-        return ["Basic Bar Chart", "Simple Time Series", "Data Distribution"]
+        return [
+            {"title": "Basic Bar Chart", "description": "Visualize categorical data distributions with a simple bar chart"},
+            {"title": "Simple Time Series", "description": "Track changes over time for key metrics in your data"},
+            {"title": "Data Distribution", "description": "Examine the statistical distribution of numerical values"}
+        ]
         
     column_summary = get_column_summary(df)
     
-    system = """You are a data visualization expert. Based on the following column summary, 
-    suggest three specific, interesting and insightful interactive plot ideas that would best 
-    visualize the data. Each idea should be unique and highlight different aspects of the data."""
+    # Create a more detailed data summary for better context
+    data_sample = ""
+    try:
+        # Add sample statistics for numerical columns
+        numeric_cols = df.select_dtypes(include=['number']).columns
+        if len(numeric_cols) > 0:
+            data_sample += "\nNumerical Column Statistics:\n"
+            for col in numeric_cols[:5]:  # Limit to first 5 numerical columns
+                data_sample += f"- {col}: min={df[col].min()}, max={df[col].max()}, mean={df[col].mean():.2f}, null={df[col].isna().sum()}\n"
+        
+        # Add value counts for categorical columns
+        cat_cols = df.select_dtypes(include=['object', 'category']).columns
+        if len(cat_cols) > 0:
+            data_sample += "\nTop Values in Categorical Columns:\n"
+            for col in cat_cols[:3]:  # Limit to first 3 categorical columns
+                top_values = df[col].value_counts().head(3)
+                data_sample += f"- {col} top values: {dict(top_values)}\n"
+    except Exception as e:
+        print(f"Error generating data sample: {e}")
+    
+    system = """You are a data visualization expert specializing in interactive data exploration. 
+    Based on the detailed column summary and data sample provided, generate THREE specific, 
+    insightful, and highly relevant plot ideas that would best visualize the most important aspects of this data.
+    
+    Focus on creating visualizations that would reveal genuine insights about THIS SPECIFIC dataset, 
+    not generic plot types. Your suggestions should be tailored to the actual columns and values present."""
     
     user = f"""
 **Column Summary:**
 {column_summary}
 
-Provide exactly THREE plot ideas. Each idea should:
-1. Have a short, descriptive name (max 5 words)
-2. Be specific to the actual data columns provided
-3. Represent a different visualization approach
+**Data Sample Information:**
+{data_sample}
 
-Return ONLY the three plot idea names as a Python list of strings. Example format: 
-["Revenue by Category", "Monthly Sales Trends", "Product Price Distribution"]
+For each of the THREE plot ideas:
+1. Generate a concise, specific title (3-5 words) that indicates exactly what would be shown
+2. Write a short description (1-2 sentences) explaining what insight this visualization would provide
+3. Make sure each idea highlights different aspects of the data and uses different visualization approaches
+4. Focus on the most analytically valuable plots given THIS SPECIFIC data
+
+Return your response as a Python list of dictionaries with this exact format:
+[
+  {{"title": "First Plot Title", "description": "Description of first plot idea"}},
+  {{"title": "Second Plot Title", "description": "Description of second plot idea"}},
+  {{"title": "Third Plot Title", "description": "Description of third plot idea"}}
+]
 """
     
     try:
         response = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)])
         content = response.content.strip()
         
-        # Extract the list from the response text
+        # Extract the list of dictionaries from the response text
         if "[" in content and "]" in content:
-            # Extract text between brackets
+            # Extract text between outermost brackets
             list_text = content[content.find("["):content.rfind("]")+1]
             try:
-                # Try to evaluate as Python list
+                # Try to evaluate as Python list of dictionaries
                 plot_ideas = eval(list_text)
                 if isinstance(plot_ideas, list) and len(plot_ideas) > 0:
-                    # Return only up to 3 ideas
-                    return plot_ideas[:3]
-            except:
-                pass
-                
-        # Fallback: Parse the response line by line
+                    # Validate structure and return up to 3 ideas
+                    valid_ideas = []
+                    for idea in plot_ideas[:3]:
+                        if isinstance(idea, dict) and 'title' in idea and 'description' in idea:
+                            valid_ideas.append({
+                                'title': idea['title'][:50],  # Limit title length
+                                'description': idea['description'][:150]  # Limit description length
+                            })
+                    
+                    if valid_ideas:
+                        return valid_ideas
+            except Exception as e:
+                print(f"Error parsing plot ideas: {e}")
+        
+        # Fallback: Parse the response line by line if structured format fails
         lines = content.split("\n")
         plot_ideas = []
+        current_idea = None
+        
         for line in lines:
-            # Remove any list markers, numbers or quotes
-            clean_line = re.sub(r'^[\d\.\-\*"\'\[\]]+\s*', '', line.strip())
-            if clean_line and len(plot_ideas) < 3:
-                plot_ideas.append(clean_line[:50])  # Limit length
+            line = line.strip()
+            if not line:
+                continue
                 
-        # If we found ideas, return them
-        if plot_ideas and len(plot_ideas) > 0:
+            # Look for numbered items or title/description patterns
+            if re.match(r'^[0-9]+\.', line) or re.match(r'^-', line) or 'title' in line.lower():
+                # This looks like a new idea title
+                if current_idea and 'title' in current_idea:
+                    plot_ideas.append(current_idea)
+                    if len(plot_ideas) >= 3:
+                        break
+                
+                current_idea = {'title': re.sub(r'^[0-9]+\.|-|\s*title\s*:|\s*', '', line, flags=re.IGNORECASE)[:50]}
+            elif current_idea and 'title' in current_idea and 'description' not in current_idea:
+                # This looks like a description for the current idea
+                current_idea['description'] = re.sub(r'description\s*:|\s*', '', line, flags=re.IGNORECASE)[:150]
+        
+        # Add the last idea if it exists
+        if current_idea and 'title' in current_idea and len(plot_ideas) < 3:
+            if 'description' not in current_idea:
+                current_idea['description'] = "No description provided"
+            plot_ideas.append(current_idea)
+        
+        # If we managed to extract ideas, return them
+        if plot_ideas:
             return plot_ideas[:3]
-            
-        # Final fallback
-        return ["Column Distribution Analysis", "Data Correlation Insights", "Trend Visualization"]
+        
+        # Final fallback with default values
+        return [
+            {"title": "Column Distribution Analysis", "description": "Visualize the distribution of key values across your most important columns"},
+            {"title": "Data Correlation Insights", "description": "Explore relationships between numerical variables to identify patterns"},
+            {"title": "Trend Visualization", "description": "Analyze how values change across categories or over time periods"}
+        ]
         
     except Exception as e:
         print(f"Error generating plot ideas: {e}")
-        return ["Basic Data Overview", "Column Relationships", "Value Distribution"]
+        return [
+            {"title": "Basic Data Overview", "description": "Simple visualization of your data's core metrics"},
+            {"title": "Column Relationships", "description": "Explore connections between different data points"},
+            {"title": "Value Distribution", "description": "See how values are distributed across your dataset"}
+        ]

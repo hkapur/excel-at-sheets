@@ -75,9 +75,16 @@
     {% if session.get('plot_ideas') %}
     <div class="plot-ideas mb-3">
       <h6>Interactive Plot Ideas:</h6>
-      {% for idea in session.get('plot_ideas') %}
-      <button class="btn btn-outline-warning btn-sm me-2 mb-2">{{ idea }}</button>
-      {% endfor %}
+      <div class="row">
+        {% for idea in session.get('plot_ideas') %}
+        <div class="col-md-4 mb-3">
+          <div class="plot-idea-card">
+            <button class="btn btn-outline-warning btn-sm w-100 mb-2">{{ idea.title }}</button>
+            <p class="plot-description">{{ idea.description }}</p>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
     </div>
     {% endif %}
 

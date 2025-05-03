@@ -1,5 +1,5 @@
 .env
-test.ipynb
+#test.ipynb
 test.py
 .venv/
 __pycache__/

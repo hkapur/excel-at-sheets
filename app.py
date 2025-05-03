@@ -302,7 +302,11 @@ def get_plot_ideas():
         return redirect(url_for("chat"))
     except Exception as e:
         print(f"Error generating plot ideas: {e}")
-        session["plot_ideas"] = ["Basic Chart", "Data Analysis", "Visual Insights"]
+        session["plot_ideas"] = [
+            {"title": "Basic Chart", "description": "Simple visualization of your data"},
+            {"title": "Data Analysis", "description": "Explore patterns in your dataset"},
+            {"title": "Visual Insights", "description": "Get visual understanding of key metrics"}
+        ]
         return redirect(url_for("chat"))
 
 if __name__ == "__main__":
