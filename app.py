@@ -22,7 +22,9 @@ from helpers import (
     generate_report_pdf,
     generate_dynamic_prompts,
     decide_chart_request,
-    _plot_bar, _plot_histogram, _plot_scatter
+    _plot_bar, _plot_histogram, _plot_scatter,
+    process_pdf_with_ocr,
+    extract_receipt_data_llm
 )
 
 load_dotenv()
@@ -225,6 +227,85 @@ def chat():
         filename=original_filename, 
         dynamic_prompts=dynamic_prompts # Pass dynamic prompts
     )
+
+# ========= New Route for PDF Receipt Processing =========
+@app.route("/process_receipt", methods=["POST"])
+def process_receipt():
+    print("POST request received at /process_receipt route.")
+    if 'receipt_file' not in request.files:
+        print("Error: 'receipt_file' not found in request.files")
+        # TODO: Add user feedback (e.g., flash message)
+        return redirect(url_for("chat")) # Redirect back to main chat page
+
+    file = request.files["receipt_file"]
+    print(f"Received receipt file: {file.filename}")
+
+    if file.filename == '':
+        print("Error: No selected receipt file")
+        # TODO: Add user feedback
+        return redirect(url_for("chat"))
+
+    if file and file.filename.lower().endswith('.pdf'):
+        temp_pdf_path = None # Initialize
+        try:
+            # Save PDF temporarily
+            temp_dir = tempfile.gettempdir()
+            # Create a unique temporary filename
+            temp_filename = f"receipt_{uuid.uuid4()}.pdf"
+            temp_pdf_path = os.path.join(temp_dir, temp_filename)
+            print(f"Attempting to save receipt PDF to: {temp_pdf_path}")
+            file.save(temp_pdf_path)
+            print(f"Receipt PDF successfully saved to: {temp_pdf_path}")
+
+            # --- Placeholder for OCR ---
+            # print(f"TODO: Call OCR function for {temp_pdf_path}")
+            ocr_text = process_pdf_with_ocr(temp_pdf_path) # Call the actual OCR function
+            # ocr_text = "[Placeholder OCR Text - Replace with actual OCR]" # Temporary
+            # --- End Placeholder ---
+
+            # --- Placeholder for LLM Structured Extraction ---
+            # print(f"TODO: Call LLM function to extract data from OCR text")
+            receipt_df = extract_receipt_data_llm(ocr_text) # Call the actual LLM parser
+            # receipt_info = f"Processed receipt: {file.filename}. [Placeholder: Date, Vendor, Total]" # Temporary
+            
+            # Format DataFrame for display
+            if not receipt_df.empty:
+                 # Use to_markdown for nice formatting in chat
+                 receipt_info = f"**Processed Receipt: {file.filename}**\n\n{receipt_df.to_markdown(index=False)}"
+            else:
+                 receipt_info = f"Could not extract structured data from receipt: {file.filename}."
+            # --- End Placeholder ---
+
+            # Add result to chat history
+            chat_history = session.get("chat_history", [])
+            chat_history.append({"role": "user", "content": f"Uploaded Receipt: {file.filename}"})
+            chat_history.append({"role": "bot", "content": receipt_info})
+            session["chat_history"] = chat_history
+            print("Receipt processing info added to chat history.")
+
+        except Exception as e:
+            print(f"Error processing receipt file: {e}")
+            # Optionally add error message to chat history
+            chat_history = session.get("chat_history", [])
+            chat_history.append({"role": "user", "content": f"Uploaded Receipt: {file.filename}"})
+            chat_history.append({"role": "bot", "content": f"Sorry, error processing receipt: {str(e)}"})
+            session["chat_history"] = chat_history
+        finally:
+            # Cleanup temporary file
+            if temp_pdf_path and os.path.exists(temp_pdf_path):
+                try:
+                    os.remove(temp_pdf_path)
+                    print(f"Cleaned up temporary file: {temp_pdf_path}")
+                except Exception as e_clean:
+                    print(f"Error cleaning up temp file {temp_pdf_path}: {e_clean}")
+
+    else:
+        print(f"Error: Invalid file type or file object for receipt. Filename: {file.filename}")
+        # TODO: Add user feedback (e.g., flash message for non-PDF)
+
+    return redirect(url_for("chat")) # Redirect back to main chat page
+
+# ========= End New Route =========
 
 @app.route("/download_report")
 def download_report():

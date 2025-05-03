@@ -9,6 +9,10 @@ from pathlib import Path # To create directory
 import base64 # Import base64
 from typing import Literal, Optional # For Pydantic model
 from pydantic import BaseModel, Field # For Pydantic model
+import fitz  # PyMuPDF
+import pytesseract
+from PIL import Image # To handle images for OCR
+from langchain.output_parsers import PydanticOutputParser
 
 from openpyxl import load_workbook
 from langchain_openai import ChatOpenAI
@@ -31,6 +35,17 @@ class ChartRequestArgs(BaseModel):
     chart_type: Literal["bar", "histogram", "scatter", "none"] = Field(description="The type of chart requested (bar, histogram, scatter, or none).")
     column1: Optional[str] = Field(None, description="The primary column name for the chart (required if chart_type is not 'none').")
     column2: Optional[str] = Field(None, description="The secondary column name (required only if chart_type is 'scatter').")
+
+# ========= Pydantic Model for Receipt Data ==========
+class ReceiptDetails(BaseModel):
+    """Schema for extracted receipt details."""
+    vendor: Optional[str] = Field(None, description="The name of the vendor or store.")
+    date: Optional[str] = Field(None, description="The date of the transaction (e.g., YYYY-MM-DD or MM/DD/YYYY).")
+    total: Optional[str] = Field(None, description="The final total amount paid.")
+
+class ReceiptList(BaseModel):
+    """Schema for a list of extracted receipts."""
+    receipts: list[ReceiptDetails] = Field(description="A list of all receipts found in the text.")
 
 # ========= LangChain Helpers =========
 
@@ -382,6 +397,124 @@ def generate_dynamic_prompts(df, max_prompts=3):
     return prompts[:max_prompts]
 
 # ========= Utility Helpers =========
+
+# --- PDF/OCR Function ---
+def process_pdf_with_ocr(pdf_path):
+    """Extracts text from all pages of a PDF using PyMuPDF and Tesseract OCR."""
+    all_text = ""
+    print(f"Starting OCR process for: {pdf_path}")
+    try:
+        doc = fitz.open(pdf_path)
+        print(f"Opened PDF: {pdf_path}, Pages: {len(doc)}")
+        
+        for page_num in range(len(doc)):
+            page = doc.load_page(page_num)
+            print(f"Processing Page {page_num + 1}/{len(doc)}...")
+            
+            # Render page to an image (pixmap)
+            # Increase DPI for better OCR results if needed, e.g., dpi=300
+            pix = page.get_pixmap(dpi=200) 
+            
+            # Convert pixmap to PIL Image
+            img_bytes = pix.tobytes("png") # Use PNG format
+            img = Image.open(io.BytesIO(img_bytes))
+            
+            # Perform OCR using pytesseract
+            try:
+                page_text = pytesseract.image_to_string(img)
+                all_text += page_text + "\n\n---\n\n" # Add separator between pages
+                print(f"  Extracted ~{len(page_text)} characters from page {page_num + 1}")
+            except pytesseract.TesseractNotFoundError:
+                 print("ERROR: Tesseract executable not found. Please install Tesseract OCR.")
+                 raise # Re-raise the specific error
+            except Exception as ocr_err:
+                 print(f"  Warning: Pytesseract error on page {page_num + 1}: {ocr_err}")
+                 # Optionally append an error marker to the text
+                 all_text += f"[OCR Error on Page {page_num + 1}]\n\n---\n\n"
+                 
+        doc.close()
+        print(f"Finished OCR. Total text length: {len(all_text)}")
+        return all_text.strip()
+        
+    except fitz.fitz.FileNotFoundError:
+         print(f"Error: PDF file not found at {pdf_path}")
+         return "Error: PDF file not found."
+    except pytesseract.TesseractNotFoundError: # Catch again if raised from loop
+         return "Error: Tesseract OCR engine not installed or not found in PATH."
+    except Exception as e:
+        print(f"Error opening or processing PDF {pdf_path}: {e}")
+        import traceback
+        traceback.print_exc()
+        return f"Error processing PDF: {str(e)}"
+
+# --- LLM Receipt Parser Function ---
+def extract_receipt_data_llm(ocr_text):
+    """Uses LLM with PydanticOutputParser to extract structured data for multiple receipts from OCR text."""
+    print("Starting LLM multiple receipt data extraction...")
+    
+    if not ocr_text or ocr_text.startswith("Error:"):
+        print(f"Skipping LLM extraction due to invalid OCR text: {ocr_text}")
+        return pd.DataFrame([{"vendor": "OCR Error", "date": None, "total": None}])
+        
+    # 1. Initialize Parser with the LIST model
+    parser = PydanticOutputParser(pydantic_object=ReceiptList) # Use ReceiptList
+    
+    # 2. Define Prompt for MULTIPLE receipts
+    format_instructions = parser.get_format_instructions()
+    system_prompt = f"""You are an expert assistant specialized in extracting information from OCR text containing one or more receipts, potentially across multiple pages (indicated by '---' separators).
+Extract the vendor name, transaction date, and total amount for **each distinct receipt** found in the text. 
+Return the results as a list of objects. If a field is not found for a specific receipt, leave it null for that receipt.
+{format_instructions}
+"""
+    user_prompt = f"Receipt Text (potentially multiple receipts):\n```\n{ocr_text}\n```\nPlease extract the information for all receipts found."
+
+    # 3. Invoke LLM
+    print("Invoking LLM for structured extraction of multiple receipts...")
+    try:
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt)
+        ]
+        response = llm.invoke(messages)
+        llm_output = response.content
+        print(f"LLM Raw Output:\n{llm_output}")
+
+        # 4. Parse Response (expecting ReceiptList)
+        try:
+            parsed_data = parser.parse(llm_output)
+            print(f"Successfully parsed LLM list response: Found {len(parsed_data.receipts)} receipts")
+            
+            # 5. Convert list of Pydantic objects to DataFrame
+            if parsed_data.receipts:
+                # Convert each ReceiptDetails object in the list to a dict
+                list_of_dicts = [receipt.dict() for receipt in parsed_data.receipts]
+                df = pd.DataFrame(list_of_dicts)
+                print("Converted list of parsed receipts to DataFrame.")
+            else:
+                 print("LLM parsed successfully but returned an empty list of receipts.")
+                 df = pd.DataFrame(columns=['vendor', 'date', 'total']) # Return empty DataFrame
+            return df
+            
+        except Exception as parse_error: # Catch parsing errors specifically
+            print(f"Error parsing LLM list response: {parse_error}")
+            print("LLM Output that failed parsing:")
+            print(llm_output) 
+            return pd.DataFrame([{
+                "vendor": "LLM Parse Error", 
+                "date": None, 
+                "total": f"Parse Error: {str(parse_error)[:100]}..."
+            }])
+
+    except Exception as llm_error:
+        print(f"Error during LLM invocation for multi-receipt parsing: {llm_error}")
+        import traceback
+        traceback.print_exc()
+        return pd.DataFrame([{
+            "vendor": "LLM Invocation Error", 
+            "date": None, 
+            "total": f"LLM Error: {str(llm_error)[:100]}..."
+        }])
+# --- End LLM Receipt Parser ---
 
 def extract_cell(text):
     match = re.search(r"\b([A-Z]{1,2}[0-9]{1,4})\b", text.upper())
