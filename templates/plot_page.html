@@ -11,6 +11,12 @@
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   
+  <!-- Hammer.js - For gesture support (required by zoom plugin) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+  
+  <!-- Chart.js Zoom Plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+  
   <style>
     body {
       background-color: #f8f9fa;
@@ -22,10 +28,21 @@
       padding: 20px;
       box-shadow: 0 4px 8px rgba(0,0,0,0.1);
       margin-bottom: 20px;
+      position: relative;
     }
     h1 {
       color: #333;
       margin-bottom: 20px;
+    }
+    .zoom-controls {
+      margin-top: 10px;
+      text-align: center;
+    }
+    .zoom-instructions {
+      margin-top: 8px;
+      font-size: 0.85rem;
+      color: #666;
+      text-align: center;
     }
   </style>
 </head>
@@ -36,6 +53,22 @@
     <div class="chart-container">
       <h3>Monthly Dollar Sales by Product</h3>
       <canvas id="salesChart"></canvas>
+      
+      <!-- Zoom Controls -->
+      <div class="zoom-controls">
+        <button id="zoom-in" class="btn btn-sm btn-outline-primary me-2">
+          <i class="bi bi-zoom-in"></i> Zoom In
+        </button>
+        <button id="zoom-out" class="btn btn-sm btn-outline-primary me-2">
+          <i class="bi bi-zoom-out"></i> Zoom Out
+        </button>
+        <button id="reset-zoom" class="btn btn-sm btn-outline-secondary">
+          Reset Zoom
+        </button>
+      </div>
+      <div class="zoom-instructions">
+        <p>Scroll to zoom, drag to pan, or use the controls above</p>
+      </div>
     </div>
     
     <div class="row">
@@ -48,6 +81,10 @@
               The line chart format helps visualize sales trends over time, making it easier to identify seasonal patterns
               and compare product performance.
             </p>
+            <div class="alert alert-info">
+              <strong>Interactive Features:</strong> Use the zoom controls to examine specific time periods. 
+              You can also scroll to zoom in/out and drag to pan across the chart.
+            </div>
           </div>
         </div>
       </div>
@@ -102,6 +139,28 @@
                 return context.dataset.label + ': $' + context.raw.toLocaleString();
               }
             }
+          },
+          zoom: {
+            pan: {
+              enabled: true,
+              mode: 'x',
+              modifierKey: 'ctrl',
+            },
+            zoom: {
+              wheel: {
+                enabled: true,
+              },
+              pinch: {
+                enabled: true
+              },
+              mode: 'x',
+              drag: {
+                enabled: true,
+                backgroundColor: 'rgba(225,225,225,0.3)',
+                borderColor: 'rgba(0,0,0,0.5)',
+                borderWidth: 1
+              }
+            }
           }
         },
         scales: {
@@ -125,6 +184,19 @@
           }
         }
       }
+    });
+    
+    // Connect zoom control buttons
+    document.getElementById('zoom-in').addEventListener('click', () => {
+      salesChart.zoom(1.1);
+    });
+    
+    document.getElementById('zoom-out').addEventListener('click', () => {
+      salesChart.zoom(0.9);
+    });
+    
+    document.getElementById('reset-zoom').addEventListener('click', () => {
+      salesChart.resetZoom();
     });
   </script>
 </body>
