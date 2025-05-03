@@ -3,7 +3,7 @@ import re
 import tempfile
 import openpyxl
 import io
-from flask import Flask, request, render_template, redirect, url_for, session, send_file, make_response, current_app
+from flask import Flask, request, render_template, redirect, url_for, session, send_file, make_response, current_app, jsonify
 from dotenv import load_dotenv
 from markupsafe import Markup
 from markdown import markdown
@@ -211,6 +211,11 @@ def chat():
     # For GET request, just render the page
     original_filename = session.get("original_filename") # Get filename from session
     dynamic_prompts = []
+    
+    # Clear plot ideas from session on page refresh
+    if "plot_ideas" in session:
+        session.pop("plot_ideas", None)
+    
     try:
         # Generate dynamic prompts based on the data for GET requests
         df, _ = extract_table_data_all_sheets(file_path)
@@ -308,6 +313,27 @@ def get_plot_ideas():
             {"title": "Visual Insights", "description": "Get visual understanding of key metrics"}
         ]
         return redirect(url_for("chat"))
+
+@app.route("/get_plot_ideas_ajax")
+def get_plot_ideas_ajax():
+    """AJAX endpoint that returns three interactive plot ideas based on the uploaded file."""
+    file_path = session.get("file_path")
+    
+    if not file_path or not os.path.exists(file_path):
+        return jsonify({"error": "No file uploaded"}), 400
+    
+    try:
+        df, _ = extract_table_data_all_sheets(file_path)
+        plot_ideas = generate_plot_ideas(df)
+        return jsonify({"plot_ideas": plot_ideas})
+    except Exception as e:
+        print(f"Error generating plot ideas: {e}")
+        fallback_ideas = [
+            {"title": "Basic Chart", "description": "Simple visualization of your data"},
+            {"title": "Data Analysis", "description": "Explore patterns in your dataset"},
+            {"title": "Visual Insights", "description": "Get visual understanding of key metrics"}
+        ]
+        return jsonify({"plot_ideas": fallback_ideas})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5018)))

@@ -62,16 +62,27 @@
       
       {# Download Button and Get Interactive Plots Button #}
       <div class="float-end">
-        <a href="{{ url_for('get_plot_ideas') }}" class="btn btn-outline-primary btn-sm mb-2 me-2" role="button">
+        <button id="plotIdeasBtn" class="btn btn-outline-primary btn-sm mb-2 me-2">
           Get Interactive Plots
-        </a>
+        </button>
         <a href="{{ url_for('download_report') }}" class="btn btn-outline-success btn-sm mb-2" role="button" target="_blank">
           Download Last Report (PDF)
         </a>
       </div>
     </div>
     
-    <!-- Plot Ideas Section (only shown when plot ideas are available) -->
+    <!-- Plot Ideas Loader -->
+    <div id="plotIdeasLoader" class="text-center mt-3 mb-3" style="display: none;">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading plot ideas...</span>
+      </div>
+      <p class="mt-2">Generating plot ideas based on your data...</p>
+    </div>
+    
+    <!-- Plot Ideas Container -->
+    <div id="plotIdeasContainer" class="mb-3" style="display: none;"></div>
+    
+    <!-- Plot Ideas Section (only shown when plot ideas are available through non-AJAX method) -->
     {% if session.get('plot_ideas') %}
     <div class="plot-ideas mb-3">
       <h6>Interactive Plot Ideas:</h6>
