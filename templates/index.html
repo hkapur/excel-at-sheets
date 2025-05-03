@@ -22,23 +22,28 @@
     </div>
     {% endif %}
 
-    <!-- Upload Form (Excel) -->
-    <form id="uploadForm" method="post" enctype="multipart/form-data" action="/" class="mb-4">
-      <div class="mb-3">
-        <label for="file" class="form-label">Upload New Excel File (.xlsx)</label>
-        <input type="file" class="form-control" id="file" name="file" required>
+    <div class="row mb-4">
+      <!-- Upload Form (Excel) -->
+      <div class="col-md-6 mb-4 mb-md-0">
+        <form id="uploadForm" method="post" enctype="multipart/form-data" action="/">
+          <div class="mb-3">
+            <label for="file" class="form-label">Upload New Excel File (.xlsx)</label>
+            <input type="file" class="form-control bg-white text-dark" id="file" name="file" required>
+          </div>
+          <button type="submit" class="btn btn-secondary w-100">📁 Upload Excel</button>
+        </form>
       </div>
-      <button type="submit" class="btn btn-success w-100">📁 Upload Excel</button>
-    </form>
-
-    <!-- PDF Receipt Upload Form -->
-    <form id="receiptUploadForm" method="post" enctype="multipart/form-data" action="/process_receipt" class="mb-4 mt-4">
-      <div class="mb-3">
-        <label for="receipt_file" class="form-label">Upload PDF Receipt (.pdf)</label>
-        <input type="file" class="form-control" id="receipt_file" name="receipt_file" accept="application/pdf" required>
+      <!-- PDF Receipt Upload Form -->
+      <div class="col-md-6">
+        <form id="receiptUploadForm" method="post" enctype="multipart/form-data" action="/process_receipt">
+          <div class="mb-3">
+            <label for="receipt_file" class="form-label">Upload PDF Receipt (.pdf)</label>
+            <input type="file" class="form-control bg-white text-dark" id="receipt_file" name="receipt_file" accept="application/pdf" required>
+          </div>
+          <button type="submit" class="btn btn-secondary w-100">📄 Process Receipt</button>
+        </form>
       </div>
-      <button type="submit" class="btn btn-info w-100">📄 Process Receipt</button>
-    </form>
+    </div>
 
     {% if file_uploaded %}
     <!-- Chat Interface -->
