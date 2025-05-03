@@ -9,6 +9,7 @@ from markupsafe import Markup
 from markdown import markdown
 from pathlib import Path
 import uuid
+import json
 
 from helpers import (
     ask_about_spreadsheet,
@@ -316,24 +317,223 @@ def get_plot_ideas():
 
 @app.route("/get_plot_ideas_ajax")
 def get_plot_ideas_ajax():
-    """AJAX endpoint that returns three interactive plot ideas based on the uploaded file."""
+    """AJAX endpoint that returns three interactive plot ideas based on the uploaded file
+       and saves the plot specifications to a file."""
     file_path = session.get("file_path")
     
     if not file_path or not os.path.exists(file_path):
         return jsonify({"error": "No file uploaded"}), 400
     
-    try:
-        df, _ = extract_table_data_all_sheets(file_path)
-        plot_ideas = generate_plot_ideas(df)
-        return jsonify({"plot_ideas": plot_ideas})
-    except Exception as e:
-        print(f"Error generating plot ideas: {e}")
-        fallback_ideas = [
+    plot_ideas_with_specs = [] # Default
+    fallback_ideas_for_response = [
             {"title": "Basic Chart", "description": "Simple visualization of your data"},
             {"title": "Data Analysis", "description": "Explore patterns in your dataset"},
             {"title": "Visual Insights", "description": "Get visual understanding of key metrics"}
         ]
-        return jsonify({"plot_ideas": fallback_ideas})
+        
+    try:
+        df, _ = extract_table_data_all_sheets(file_path)
+        # This now returns [{'title': '..', 'description': '..', 'specification': {...}}, ...]
+        plot_ideas_with_specs = generate_plot_ideas(df)
+        
+        # Extract specifications for saving
+        specifications_to_save = [idea.get('specification', {}) for idea in plot_ideas_with_specs]
+        
+        # Save specifications to plot_specification.json
+        spec_file_path = "plot_specification.json"
+        try:
+            with open(spec_file_path, 'w') as f:
+                json.dump(specifications_to_save, f, indent=2)
+            print(f"Successfully saved plot specifications to {spec_file_path}")
+        except IOError as io_e:
+            print(f"Error saving plot specifications to {spec_file_path}: {io_e}")
+            # Decide if this error should prevent response, for now, we continue but log it.
+        except Exception as json_e:
+             print(f"Error during JSON serialization for specifications: {json_e}")
+        
+        # Prepare the response: list of dicts with only title and description
+        ideas_for_response = [
+            {'title': idea.get('title', 'Error Title'), 'description': idea.get('description', 'Error Description')}
+            for idea in plot_ideas_with_specs
+        ]
+        
+        return jsonify({"plot_ideas": ideas_for_response})
+        
+    except Exception as e:
+        print(f"Error generating plot ideas in AJAX route: {e}")
+        # Use the predefined fallback ideas if generation fails
+        return jsonify({"plot_ideas": fallback_ideas_for_response})
+
+@app.route("/plot_loading/<int:idea_index>")
+def plot_loading(idea_index):
+    """
+    Shows loading animation before redirecting to the plot code generation page.
+    """
+    # Validate that the idea_index is valid
+    spec_file_path = "plot_specification.json"
+    try:
+        with open(spec_file_path, 'r') as f:
+            plot_specs = json.load(f)
+            
+        if idea_index >= len(plot_specs):
+            return render_template("error.html", error="Invalid plot selection.")
+    except Exception as e:
+        print(f"Error checking plot specifications: {e}")
+        return render_template("error.html", error="Failed to load plot specifications.")
+    
+    # Render the loading page with the redirect URL
+    redirect_url = url_for('generate_plot_code', idea_index=idea_index)
+    return render_template("plot_loading.html", redirect_url=redirect_url)
+
+@app.route("/generate_plot_code/<int:idea_index>")
+def generate_plot_code(idea_index):
+    """
+    Generates matplotlib, numpy, and pandas code to implement the plotting based on a specification.
+    """
+    file_path = session.get("file_path")
+    
+    if not file_path or not os.path.exists(file_path):
+        return redirect(url_for("upload_file"))
+    
+    # Try to load the specifications from file
+    spec_file_path = "plot_specification.json"
+    try:
+        with open(spec_file_path, 'r') as f:
+            plot_specs = json.load(f)
+            
+        if not plot_specs or idea_index >= len(plot_specs):
+            return render_template("error.html", error="Plot specification not found.")
+            
+        spec = plot_specs[idea_index]
+        # Generate title and description based on spec
+        title = f"{spec.get('plot_type', 'Plot').title()} Chart"
+        description = spec.get('rationale', 'Visualization based on your data')
+        
+        # Get dataframe for code generation
+        df, _ = extract_table_data_all_sheets(file_path)
+        
+        # This is where we would call an LLM to generate the code - for now, creating a template
+        system_prompt = """You are a data visualization expert. Generate Python code using matplotlib, numpy, 
+        and pandas to create a visualization based on the specification and dataframe provided. The code should:
+        1. Be complete and ready to run
+        2. Include all necessary imports
+        3. Handle edge cases like missing data
+        4. Include appropriate titles, labels, and styling
+        5. Save the plot to a file called 'plot.png'
+        """
+        
+        user_prompt = f"""
+        Plot Specification: {json.dumps(spec, indent=2)}
+        
+        Dataframe Information:
+        - Columns: {list(df.columns)}
+        - Shape: {df.shape}
+        - Data types: {df.dtypes.to_dict()}
+        - First few rows: {df.head(3).to_dict()}
+        
+        Generate Python code to implement this visualization.
+        """
+        
+        # Generate code using an LLM (simplified for now - in production, call actual LLM)
+        plot_code = generate_plot_code_with_llm(spec, df)
+        
+        # Return the template with the generated code
+        return render_template(
+            "plot_view.html",
+            idea_title=title,
+            idea_description=description,
+            code=plot_code
+        )
+        
+    except Exception as e:
+        print(f"Error generating plot code: {e}")
+        import traceback
+        traceback.print_exc()
+        return render_template("error.html", error=f"Failed to generate plot code: {str(e)}")
+
+def generate_plot_code_with_llm(spec, df):
+    """Uses LLM to generate matplotlib, numpy and pandas code based on the plot specification."""
+    try:
+        # In a real implementation, this would call your LLM
+        # For now, generating a template based on the specification
+        plot_type = spec.get('plot_type', 'bar')
+        x_column = spec.get('x_column')
+        y_column = spec.get('y_column')
+        color_column = spec.get('color_column')
+        aggregation = spec.get('aggregation')
+        
+        # Simple template-based code generation
+        code = """import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Set style
+plt.style.use('ggplot')
+sns.set_palette('colorblind')
+
+# Prepare data
+"""
+        
+        # Add data preparation code based on specification
+        if plot_type == 'bar':
+            if x_column and y_column:
+                code += f"# Group by {x_column} and calculate {aggregation or 'count'} of {y_column}\n"
+                if aggregation:
+                    code += f"plot_data = df.groupby('{x_column}')['{y_column}'].{aggregation}().reset_index()\n\n"
+                else:
+                    code += f"plot_data = df.groupby('{x_column}')['{y_column}'].count().reset_index()\n\n"
+                
+                code += f"# Create bar plot\nplt.figure(figsize=(10, 6))\n"
+                
+                if color_column:
+                    code += f"bars = sns.barplot(x='{x_column}', y='{y_column}', hue='{color_column}', data=plot_data)\n"
+                else:
+                    code += f"bars = sns.barplot(x='{x_column}', y='{y_column}', data=plot_data)\n"
+                    
+                code += f"plt.title('Bar Chart of {y_column} by {x_column}')\n"
+                code += f"plt.xlabel('{x_column}')\n"
+                code += f"plt.ylabel('{y_column}')\n"
+                
+        elif plot_type == 'scatter':
+            if x_column and y_column:
+                code += f"# Create scatter plot\nplt.figure(figsize=(10, 6))\n"
+                
+                if color_column:
+                    code += f"scatter = sns.scatterplot(x='{x_column}', y='{y_column}', hue='{color_column}', data=df)\n"
+                else:
+                    code += f"scatter = sns.scatterplot(x='{x_column}', y='{y_column}', data=df)\n"
+                    
+                code += f"plt.title('Scatter Plot of {y_column} vs {x_column}')\n"
+                code += f"plt.xlabel('{x_column}')\n"
+                code += f"plt.ylabel('{y_column}')\n"
+                
+        else:  # Default fallback
+            code += "# Create a basic plot based on available data\n"
+            code += "plt.figure(figsize=(10, 6))\n"
+            if len(df.columns) >= 2:
+                code += f"plt.plot(df['{df.columns[0]}'], df['{df.columns[1]}'])\n"
+                code += f"plt.title('Plot of {df.columns[1]} over {df.columns[0]}')\n"
+                code += f"plt.xlabel('{df.columns[0]}')\n"
+                code += f"plt.ylabel('{df.columns[1]}')\n"
+            else:
+                code += "plt.plot(df.index, df[df.columns[0]])\n"
+                code += f"plt.title('Plot of {df.columns[0]}')\n"
+                code += "plt.xlabel('Index')\n"
+                code += f"plt.ylabel('{df.columns[0]}')\n"
+        
+        # Add common finishing code
+        code += """
+# Adjust layout and save
+plt.tight_layout()
+plt.savefig('plot.png', dpi=300, bbox_inches='tight')
+plt.show()
+"""
+        
+        return code
+    except Exception as e:
+        print(f"Error in code generation function: {e}")
+        return f"# Error generating code: {e}\n\n# Please try a different visualization."
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5018)))

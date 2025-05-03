@@ -74,7 +74,7 @@ document.addEventListener("DOMContentLoaded", function () {
             const row = document.createElement('div');
             row.className = 'row';
             
-            data.plot_ideas.forEach(idea => {
+            data.plot_ideas.forEach((idea, index) => {
               const col = document.createElement('div');
               col.className = 'col-md-4 mb-3';
               
@@ -84,6 +84,11 @@ document.addEventListener("DOMContentLoaded", function () {
               const button = document.createElement('button');
               button.className = 'btn btn-outline-warning btn-sm w-100 mb-2';
               button.textContent = idea.title;
+              
+              // Add click event listener to redirect to the loading page
+              button.addEventListener('click', function() {
+                window.location.href = `/plot_loading/${index}`;
+              });
               
               const desc = document.createElement('p');
               desc.className = 'plot-description';

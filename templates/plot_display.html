@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>📊 Generated Plot</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Custom CSS (optional, can reuse chat.css or make specific one) -->
+  <link href="{{ url_for('static', filename='css/chat.css') }}" rel="stylesheet">
+  <style>
+    body {
+      background-color: #f8f9fa; /* Light background */
+      padding-top: 20px;
+    }
+    .plot-container {
+      background-color: #ffffff; /* White background for the card */
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      max-width: 900px; /* Limit width */
+      margin: auto; /* Center */
+    }
+    .plot-container img {
+      max-width: 100%;
+      height: auto;
+      border: 1px solid #dee2e6; /* Light border for the image */
+      border-radius: 4px;
+      margin-top: 15px;
+      margin-bottom: 15px;
+    }
+    .plot-description {
+        font-style: italic;
+        color: #6c757d; /* Gray color for description */
+        margin-top: 10px;
+    }
+    .back-link {
+        margin-top: 20px;
+        display: inline-block;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="plot-container text-center">
+      <h2 class="mb-3">{{ plot_title | safe }}</h2>
+      <p class="plot-description">{{ plot_description | safe }}</p>
+      
+      {% if chart_url %}
+        <img src="{{ chart_url }}" alt="{{ plot_title | safe }}">
+      {% else %}
+        <div class="alert alert-danger" role="alert">
+          Could not generate the plot image.
+        </div>
+      {% endif %}
+
+      <a href="{{ url_for('chat') }}" class="btn btn-secondary back-link">Back to Chat</a>
+
+    </div>
+  </div>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 

@@ -470,44 +470,75 @@ def _plot_scatter(df, col1_name, col2_name, chart_path):
 
 def generate_plot_ideas(df):
     """
-    Uses LLM to generate three interactive plot ideas based on the uploaded xlsx file
-    Returns a list of dictionaries with 'title' and 'description' for each plot idea
+    Uses LLM to generate three interactive plot ideas based on the uploaded xlsx file.
+    For each idea, it generates a title, description, and a detailed specification
+    for plotting.
+    Returns a list of dictionaries with 'title', 'description', and 'specification' for each plot idea.
     """
     if df is None or df.empty:
+        # Return default ideas with placeholder specifications if df is empty
+        default_spec = {"plot_type": "info", "message": "No data available"}
         return [
-            {"title": "Basic Bar Chart", "description": "Visualize categorical data distributions with a simple bar chart"},
-            {"title": "Simple Time Series", "description": "Track changes over time for key metrics in your data"},
-            {"title": "Data Distribution", "description": "Examine the statistical distribution of numerical values"}
+            {"title": "Basic Bar Chart", "description": "Visualize categorical data distributions", "specification": default_spec},
+            {"title": "Simple Time Series", "description": "Track changes over time for key metrics", "specification": default_spec},
+            {"title": "Data Distribution", "description": "Examine numerical value distribution", "specification": default_spec}
         ]
         
     column_summary = get_column_summary(df)
     
     # Create a more detailed data summary for better context
     data_sample = ""
+    numeric_cols = df.select_dtypes(include=['number']).columns
+    cat_cols = df.select_dtypes(include=['object', 'category']).columns
+    
     try:
-        # Add sample statistics for numerical columns
-        numeric_cols = df.select_dtypes(include=['number']).columns
         if len(numeric_cols) > 0:
             data_sample += "\nNumerical Column Statistics:\n"
-            for col in numeric_cols[:5]:  # Limit to first 5 numerical columns
-                data_sample += f"- {col}: min={df[col].min()}, max={df[col].max()}, mean={df[col].mean():.2f}, null={df[col].isna().sum()}\n"
+            for col in numeric_cols[:5]:
+                stats = df[col].agg(['min', 'max', 'mean', 'std', lambda x: x.isna().sum()]).to_dict()
+                data_sample += f"- {col}: min={stats.get('min', 'N/A')}, max={stats.get('max', 'N/A')}, mean={stats.get('mean', 'N/A'):.2f}, std={stats.get('std', 'N/A'):.2f}, nulls={stats.get('<lambda>', 0)}\n"
         
-        # Add value counts for categorical columns
-        cat_cols = df.select_dtypes(include=['object', 'category']).columns
         if len(cat_cols) > 0:
             data_sample += "\nTop Values in Categorical Columns:\n"
-            for col in cat_cols[:3]:  # Limit to first 3 categorical columns
-                top_values = df[col].value_counts().head(3)
-                data_sample += f"- {col} top values: {dict(top_values)}\n"
+            for col in cat_cols[:3]:
+                top_values = df[col].value_counts().head(3).to_dict()
+                data_sample += f"- {col} top values: {top_values}, nulls={df[col].isna().sum()}\n"
     except Exception as e:
         print(f"Error generating data sample: {e}")
+        data_sample = "\nCould not generate detailed data sample.\n" # Provide fallback text
     
     system = """You are a data visualization expert specializing in interactive data exploration. 
-    Based on the detailed column summary and data sample provided, generate THREE specific, 
-    insightful, and highly relevant plot ideas that would best visualize the most important aspects of this data.
-    
-    Focus on creating visualizations that would reveal genuine insights about THIS SPECIFIC dataset, 
-    not generic plot types. Your suggestions should be tailored to the actual columns and values present."""
+Based on the detailed column summary and data sample provided, generate THREE specific, insightful, and highly relevant plot ideas.
+
+**For EACH of the THREE plot ideas, provide:**
+1.  A concise, specific **title** (3-5 words) indicating what is shown.
+2.  A short **description** (1-2 sentences) explaining the insight the visualization provides.
+3.  A detailed **specification** dictionary containing the necessary information to *programmatically* create the plot. The specification keys should include:
+    *   `plot_type`: (string) e.g., 'bar', 'histogram', 'scatter', 'line', 'pie', 'box'. Choose the *most appropriate* type.
+    *   `x_column`: (string or null) The name of the column for the x-axis. Use null if not applicable (e.g., pie chart).
+    *   `y_column`: (string or null) The name of the column for the y-axis. Use null if the y-axis represents frequency/count (e.g., histogram, count bar chart).
+    *   `aggregation`: (string or null) How to aggregate `y_column` if specified (e.g., 'sum', 'mean', 'median', 'count'). Use 'count' for bar charts showing frequency, null otherwise or if `y_column` is null.
+    *   `color_column`: (string or null) Optional column to use for coloring (e.g., different categories in a scatter plot).
+    *   `time_unit`: (string or null) Optional for time series ('D', 'W', 'M', 'Y') if aggregation is needed.
+    *   `rationale`: (string) Briefly explain *why* this plot and these columns were chosen based on the data.
+
+**Guidelines:**
+*   Focus on visualizations revealing genuine insights about THIS SPECIFIC dataset.
+*   Ensure each idea highlights different aspects and uses potentially different plot types.
+*   Tailor suggestions to the actual columns, data types, and values present (use exact column names).
+*   Base your choices on analytical value.
+
+Return your response as a VALID Python list of dictionaries with this exact format:
+[
+  {
+    "title": "...", 
+    "description": "...", 
+    "specification": {"plot_type": "...", "x_column": "...", ... "rationale": "..."}
+  },
+  { ... },
+  { ... }
+]
+"""
     
     user = f"""
 **Column Summary:**
@@ -516,90 +547,89 @@ def generate_plot_ideas(df):
 **Data Sample Information:**
 {data_sample}
 
-For each of the THREE plot ideas:
-1. Generate a concise, specific title (3-5 words) that indicates exactly what would be shown
-2. Write a short description (1-2 sentences) explaining what insight this visualization would provide
-3. Make sure each idea highlights different aspects of the data and uses different visualization approaches
-4. Focus on the most analytically valuable plots given THIS SPECIFIC data
-
-Return your response as a Python list of dictionaries with this exact format:
-[
-  {{"title": "First Plot Title", "description": "Description of first plot idea"}},
-  {{"title": "Second Plot Title", "description": "Description of second plot idea"}},
-  {{"title": "Third Plot Title", "description": "Description of third plot idea"}}
-]
+Generate THREE tailored plot ideas with titles, descriptions, and detailed specifications in the specified Python list format.
 """
+    
+    plot_ideas = [] # Initialize default empty list
     
     try:
         response = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)])
         content = response.content.strip()
         
-        # Extract the list of dictionaries from the response text
-        if "[" in content and "]" in content:
-            # Extract text between outermost brackets
-            list_text = content[content.find("["):content.rfind("]")+1]
+        # Improved extraction focusing on the JSON-like structure
+        match = re.search(r'(\[.*\])', content, re.DOTALL)
+        if match:
+            list_text = match.group(1)
             try:
-                # Try to evaluate as Python list of dictionaries
-                plot_ideas = eval(list_text)
-                if isinstance(plot_ideas, list) and len(plot_ideas) > 0:
-                    # Validate structure and return up to 3 ideas
+                # Use json.loads for more robust parsing than eval
+                import json
+                parsed_ideas = json.loads(list_text) 
+                
+                if isinstance(parsed_ideas, list) and len(parsed_ideas) > 0:
                     valid_ideas = []
-                    for idea in plot_ideas[:3]:
-                        if isinstance(idea, dict) and 'title' in idea and 'description' in idea:
-                            valid_ideas.append({
-                                'title': idea['title'][:50],  # Limit title length
-                                'description': idea['description'][:150]  # Limit description length
-                            })
+                    for idea in parsed_ideas[:3]:
+                        # Validate structure more thoroughly
+                        if (isinstance(idea, dict) and 
+                            'title' in idea and isinstance(idea['title'], str) and
+                            'description' in idea and isinstance(idea['description'], str) and
+                            'specification' in idea and isinstance(idea['specification'], dict) and
+                            'plot_type' in idea['specification'] and isinstance(idea['specification']['plot_type'], str) and # Basic check
+                            'rationale' in idea['specification'] and isinstance(idea['specification']['rationale'], str)): # Check rationale presence
+                            
+                            # Basic cleaning/limiting
+                            idea['title'] = idea['title'][:60]
+                            idea['description'] = idea['description'][:200]
+                            idea['specification']['plot_type'] = idea['specification'].get('plot_type', 'unknown').lower()
+                            # Ensure required spec fields exist, provide defaults if missing
+                            idea['specification'].setdefault('x_column', None)
+                            idea['specification'].setdefault('y_column', None)
+                            idea['specification'].setdefault('aggregation', None)
+                            idea['specification'].setdefault('color_column', None)
+                            idea['specification'].setdefault('time_unit', None)
+                            
+                            valid_ideas.append(idea)
                     
                     if valid_ideas:
-                        return valid_ideas
+                        plot_ideas = valid_ideas # Assign successfully parsed and validated ideas
+                        
+            except json.JSONDecodeError as json_e:
+                print(f"Error parsing plot ideas JSON: {json_e}")
+                # Keep plot_ideas as empty, fallback will be triggered
             except Exception as e:
-                print(f"Error parsing plot ideas: {e}")
+                print(f"Error processing parsed plot ideas: {e}")
+                # Keep plot_ideas as empty, fallback will be triggered
+        else:
+             print("Could not find JSON-like list structure in LLM response for plot ideas.")
+             # Keep plot_ideas as empty, fallback will be triggered
+
+        # If parsing failed or returned no valid ideas, use a fallback
+        if not plot_ideas:
+            print("Falling back to default plot ideas.")
+            default_spec = {
+                "plot_type": "fallback", 
+                "x_column": None, "y_column": None, "aggregation": None, 
+                "color_column": None, "time_unit": None,
+                "rationale": "Fallback due to parsing error or missing data."
+            }
+            plot_ideas = [
+                {"title": "Column Distribution Analysis", "description": "Visualize key value distributions", "specification": default_spec},
+                {"title": "Data Correlation Insights", "description": "Explore relationships between numerical variables", "specification": default_spec},
+                {"title": "Trend Visualization", "description": "Analyze changes across categories or time", "specification": default_spec}
+            ]
         
-        # Fallback: Parse the response line by line if structured format fails
-        lines = content.split("\n")
-        plot_ideas = []
-        current_idea = None
-        
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-                
-            # Look for numbered items or title/description patterns
-            if re.match(r'^[0-9]+\.', line) or re.match(r'^-', line) or 'title' in line.lower():
-                # This looks like a new idea title
-                if current_idea and 'title' in current_idea:
-                    plot_ideas.append(current_idea)
-                    if len(plot_ideas) >= 3:
-                        break
-                
-                current_idea = {'title': re.sub(r'^[0-9]+\.|-|\s*title\s*:|\s*', '', line, flags=re.IGNORECASE)[:50]}
-            elif current_idea and 'title' in current_idea and 'description' not in current_idea:
-                # This looks like a description for the current idea
-                current_idea['description'] = re.sub(r'description\s*:|\s*', '', line, flags=re.IGNORECASE)[:150]
-        
-        # Add the last idea if it exists
-        if current_idea and 'title' in current_idea and len(plot_ideas) < 3:
-            if 'description' not in current_idea:
-                current_idea['description'] = "No description provided"
-            plot_ideas.append(current_idea)
-        
-        # If we managed to extract ideas, return them
-        if plot_ideas:
-            return plot_ideas[:3]
-        
-        # Final fallback with default values
-        return [
-            {"title": "Column Distribution Analysis", "description": "Visualize the distribution of key values across your most important columns"},
-            {"title": "Data Correlation Insights", "description": "Explore relationships between numerical variables to identify patterns"},
-            {"title": "Trend Visualization", "description": "Analyze how values change across categories or over time periods"}
-        ]
+        return plot_ideas[:3] # Ensure max 3 ideas are returned
         
     except Exception as e:
         print(f"Error generating plot ideas: {e}")
+        # Final fallback in case of major error in the try block
+        default_spec = {
+            "plot_type": "error", 
+            "x_column": None, "y_column": None, "aggregation": None, 
+            "color_column": None, "time_unit": None,
+            "rationale": "Fallback due to exception during generation."
+            }
         return [
-            {"title": "Basic Data Overview", "description": "Simple visualization of your data's core metrics"},
-            {"title": "Column Relationships", "description": "Explore connections between different data points"},
-            {"title": "Value Distribution", "description": "See how values are distributed across your dataset"}
+            {"title": "Basic Data Overview", "description": "Simple visualization of core metrics", "specification": default_spec},
+            {"title": "Column Relationships", "description": "Explore connections between data points", "specification": default_spec},
+            {"title": "Value Distribution", "description": "See how values are distributed", "specification": default_spec}
         ]

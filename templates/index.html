@@ -90,7 +90,7 @@
         {% for idea in session.get('plot_ideas') %}
         <div class="col-md-4 mb-3">
           <div class="plot-idea-card">
-            <button class="btn btn-outline-warning btn-sm w-100 mb-2">{{ idea.title }}</button>
+            <a href="{{ url_for('plot_loading', idea_index=loop.index0) }}" class="btn btn-outline-warning btn-sm w-100 mb-2">{{ idea.title }}</a>
             <p class="plot-description">{{ idea.description }}</p>
           </div>
         </div>
