@@ -851,6 +851,7 @@ def generate_financial_analysis(categorized_data, period_str, total_spent_str, n
         # --- New Structured Prompt ---
         system_prompt = """You are a financial analyst assistant. 
 Analyze the user's spending based on the provided summary. 
+
 A transaction table and a pie chart visualizing these categories are also shown to the user separately.
 
 Generate a response strictly following this structure:
