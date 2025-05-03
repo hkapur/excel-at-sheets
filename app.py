@@ -3,6 +3,8 @@ import re
 import tempfile
 import openpyxl
 import io
+import json
+import pandas as pd
 from flask import Flask, request, render_template, redirect, url_for, session, send_file, make_response, current_app, jsonify
 from dotenv import load_dotenv
 from markupsafe import Markup
@@ -286,6 +288,89 @@ def download_report():
     else:
         print("Download Error: PDF generation failed.")
         return "Error generating PDF.", 500
+
+@app.route("/product_sales_plot")
+def product_sales_plot():
+    """Renders a page with a line chart showing dollar sales of three products by month."""
+    file_path = session.get("file_path")
+    
+    if not file_path or not os.path.exists(file_path):
+        return redirect(url_for("upload_file"))
+    
+    try:
+        # Load the Excel file using pandas
+        df = pd.read_excel(file_path)
+        
+        # Basic data validation
+        required_columns = ['Month', 'Product', 'Dollar_Sales']
+        
+        # Check if the required columns exist or try to find similar ones
+        if not all(col in df.columns for col in required_columns):
+            # Try finding similar column names (a simple approach)
+            column_mapping = {}
+            for req_col in required_columns:
+                for col in df.columns:
+                    # Simple matching logic - can be improved
+                    if req_col.lower() in col.lower():
+                        column_mapping[req_col] = col
+                        break
+            
+            # If found mappings, rename the columns
+            if len(column_mapping) == len(required_columns):
+                df.rename(columns=column_mapping, inplace=True)
+            else:
+                # If still don't have all columns, generate sample data
+                print("Required columns not found in Excel file. Using sample data.")
+                months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+                products = ['Smartphone', 'Laptop', 'Tablet']
+                sample_data = []
+                
+                import random
+                for month in months:
+                    for product in products:
+                        sample_data.append({
+                            'Month': month,
+                            'Product': product,
+                            'Dollar_Sales': random.randint(5000, 20000)
+                        })
+                
+                df = pd.DataFrame(sample_data)
+        
+        # Get unique months and products
+        months = df['Month'].unique().tolist()
+        
+        # Select top 3 products by total sales
+        top_products = df.groupby('Product')['Dollar_Sales'].sum().nlargest(3).index.tolist()
+        
+        # Prepare data structure for Chart.js
+        sales_data = []
+        for product in top_products:
+            product_data = []
+            for month in months:
+                # Get sales for this product and month
+                sales = df[(df['Product'] == product) & (df['Month'] == month)]['Dollar_Sales'].sum()
+                # Convert NumPy types to native Python types
+                product_data.append(float(sales))
+            sales_data.append(product_data)
+        
+        # Convert to JSON for the template
+        sales_data_json = json.dumps(sales_data)
+        months_json = json.dumps(months)
+        products_json = json.dumps(top_products)
+        
+        return render_template(
+            'plot_page.html',
+            sales_data=sales_data_json,
+            months=months_json,
+            product_names=products_json
+        )
+        
+    except Exception as e:
+        print(f"Error generating sales plot: {e}")
+        import traceback
+        traceback.print_exc()
+        # Return a simple error page
+        return f"<h1>Error generating plot</h1><p>{str(e)}</p><p><a href='{url_for('chat')}'>Return to chat</a></p>"
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5018)))

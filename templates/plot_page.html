@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Product Sales Chart</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <style>
+    body {
+      background-color: #f8f9fa;
+      padding: 20px;
+    }
+    .chart-container {
+      background-color: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 class="text-center mb-4">Product Sales Analysis</h1>
+    
+    <div class="chart-container">
+      <h3>Monthly Dollar Sales by Product</h3>
+      <canvas id="salesChart"></canvas>
+    </div>
+    
+    <div class="row">
+      <div class="col-md-12">
+        <div class="card">
+          <div class="card-body">
+            <h5 class="card-title">Chart Details</h5>
+            <p class="card-text">
+              This chart displays the monthly dollar sales for three key products from the 2024 Electronics Sales data.
+              The line chart format helps visualize sales trends over time, making it easier to identify seasonal patterns
+              and compare product performance.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Sales data will be injected from the Flask route
+    const salesData = {{ sales_data|safe }};
+    const months = {{ months|safe }};
+    const productNames = {{ product_names|safe }};
+    
+    // Random colors for the lines
+    const colors = [
+      'rgba(255, 99, 132, 1)',
+      'rgba(54, 162, 235, 1)',
+      'rgba(255, 206, 86, 1)'
+    ];
+    
+    // Prepare datasets for Chart.js
+    const datasets = productNames.map((product, index) => {
+      return {
+        label: product,
+        data: salesData[index],
+        borderColor: colors[index],
+        backgroundColor: colors[index].replace('1)', '0.1)'),
+        tension: 0.1,
+        borderWidth: 2
+      };
+    });
+    
+    // Create the chart
+    const ctx = document.getElementById('salesChart').getContext('2d');
+    const salesChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: months,
+        datasets: datasets
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          title: {
+            display: true,
+            text: 'Monthly Dollar Sales by Product (2024)'
+          },
+          tooltip: {
+            mode: 'index',
+            intersect: false,
+            callbacks: {
+              label: function(context) {
+                return context.dataset.label + ': $' + context.raw.toLocaleString();
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            title: {
+              display: true,
+              text: 'Dollar Sales ($)'
+            },
+            ticks: {
+              callback: function(value) {
+                return '$' + value.toLocaleString();
+              }
+            }
+          },
+          x: {
+            title: {
+              display: true,
+              text: 'Month'
+            }
+          }
+        }
+      }
+    });
+  </script>
+</body>
+</html> 

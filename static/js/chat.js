@@ -47,65 +47,8 @@ document.addEventListener("DOMContentLoaded", function () {
     plotIdeasBtn.addEventListener("click", function(e) {
       e.preventDefault();
       
-      // Show loading animation
-      if (plotIdeasLoader) {
-        plotIdeasLoader.style.display = "block";
-      }
-      
-      // Hide any existing plot ideas
-      if (plotIdeasContainer) {
-        plotIdeasContainer.innerHTML = "";
-        plotIdeasContainer.style.display = "none";
-      }
-      
-      // Fetch plot ideas via AJAX
-      fetch('/get_plot_ideas_ajax')
-        .then(response => response.json())
-        .then(data => {
-          // Hide loading animation
-          if (plotIdeasLoader) {
-            plotIdeasLoader.style.display = "none";
-          }
-          
-          // Display plot ideas
-          if (plotIdeasContainer && data.plot_ideas) {
-            plotIdeasContainer.innerHTML = "";
-            
-            const row = document.createElement('div');
-            row.className = 'row';
-            
-            data.plot_ideas.forEach(idea => {
-              const col = document.createElement('div');
-              col.className = 'col-md-4 mb-3';
-              
-              const card = document.createElement('div');
-              card.className = 'plot-idea-card';
-              
-              const button = document.createElement('button');
-              button.className = 'btn btn-outline-warning btn-sm w-100 mb-2';
-              button.textContent = idea.title;
-              
-              const desc = document.createElement('p');
-              desc.className = 'plot-description';
-              desc.textContent = idea.description;
-              
-              card.appendChild(button);
-              card.appendChild(desc);
-              col.appendChild(card);
-              row.appendChild(col);
-            });
-            
-            plotIdeasContainer.appendChild(row);
-            plotIdeasContainer.style.display = "block";
-          }
-        })
-        .catch(error => {
-          console.error('Error fetching plot ideas:', error);
-          // Hide loading animation
-          if (plotIdeasLoader) {
-            plotIdeasLoader.style.display = "none";
-          }
-        });
+      // Redirect to the product sales plot page
+      window.open('/product_sales_plot', '_blank');
     });
   }
   // --- End Plot Ideas Button Click Handler ---
