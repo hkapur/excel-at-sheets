@@ -2,11 +2,10 @@ services:
   - type: web
     name: excel-at-sheets
     env: python
-    buildCommand: |
-      apt-get update
-      apt-get install -y tesseract-ocr
-      pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app
+    build:
+      aptPkgs: ./render-build/apt-packages
     envVars:
       - key: OPENAI_API_KEY
         sync: false
