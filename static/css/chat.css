@@ -99,3 +99,31 @@ body {
   color: #eee; /* Slightly brighter for filename */
 }
 /* --- End Current File Info Styling --- */
+
+/* --- Plot Ideas Styling --- */
+.plot-ideas {
+  background-color: #2d2d3d; /* Slightly different background from prompts */
+  padding: 10px 15px;
+  border-radius: 10px;
+  margin-top: 10px;
+}
+
+.plot-ideas h6 {
+  color: #ddd;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+.plot-ideas button {
+  background-color: transparent;
+  border-color: #ffc107;
+  color: #ffc107;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.plot-ideas button:hover {
+  background-color: #ffc107;
+  color: #212529;
+}
+/* --- End Plot Ideas Styling --- */

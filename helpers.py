@@ -467,3 +467,67 @@ def _plot_scatter(df, col1_name, col2_name, chart_path):
     except Exception as e:
         print(f"Plot Error (Scatter): {e}")
         return False
+
+def generate_plot_ideas(df):
+    """
+    Uses LLM to generate three interactive plot ideas based on the uploaded xlsx file
+    Returns a list of plot idea names
+    """
+    if df is None or df.empty:
+        return ["Basic Bar Chart", "Simple Time Series", "Data Distribution"]
+        
+    column_summary = get_column_summary(df)
+    
+    system = """You are a data visualization expert. Based on the following column summary, 
+    suggest three specific, interesting and insightful interactive plot ideas that would best 
+    visualize the data. Each idea should be unique and highlight different aspects of the data."""
+    
+    user = f"""
+**Column Summary:**
+{column_summary}
+
+Provide exactly THREE plot ideas. Each idea should:
+1. Have a short, descriptive name (max 5 words)
+2. Be specific to the actual data columns provided
+3. Represent a different visualization approach
+
+Return ONLY the three plot idea names as a Python list of strings. Example format: 
+["Revenue by Category", "Monthly Sales Trends", "Product Price Distribution"]
+"""
+    
+    try:
+        response = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)])
+        content = response.content.strip()
+        
+        # Extract the list from the response text
+        if "[" in content and "]" in content:
+            # Extract text between brackets
+            list_text = content[content.find("["):content.rfind("]")+1]
+            try:
+                # Try to evaluate as Python list
+                plot_ideas = eval(list_text)
+                if isinstance(plot_ideas, list) and len(plot_ideas) > 0:
+                    # Return only up to 3 ideas
+                    return plot_ideas[:3]
+            except:
+                pass
+                
+        # Fallback: Parse the response line by line
+        lines = content.split("\n")
+        plot_ideas = []
+        for line in lines:
+            # Remove any list markers, numbers or quotes
+            clean_line = re.sub(r'^[\d\.\-\*"\'\[\]]+\s*', '', line.strip())
+            if clean_line and len(plot_ideas) < 3:
+                plot_ideas.append(clean_line[:50])  # Limit length
+                
+        # If we found ideas, return them
+        if plot_ideas and len(plot_ideas) > 0:
+            return plot_ideas[:3]
+            
+        # Final fallback
+        return ["Column Distribution Analysis", "Data Correlation Insights", "Trend Visualization"]
+        
+    except Exception as e:
+        print(f"Error generating plot ideas: {e}")
+        return ["Basic Data Overview", "Column Relationships", "Value Distribution"]

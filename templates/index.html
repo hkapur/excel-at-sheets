@@ -60,11 +60,26 @@
       <button class="btn btn-outline-light btn-sm me-2 mb-2" data-prompt="{{ prompt }}">{{ prompt }}</button>
       {% endfor %}
       
-      {# Download Button (Keep at the end) #}
-      <a href="{{ url_for('download_report') }}" class="btn btn-outline-success btn-sm mb-2 ms-auto" role="button" target="_blank">
-        Download Last Report (PDF)
-      </a>
+      {# Download Button and Get Interactive Plots Button #}
+      <div class="float-end">
+        <a href="{{ url_for('get_plot_ideas') }}" class="btn btn-outline-primary btn-sm mb-2 me-2" role="button">
+          Get Interactive Plots
+        </a>
+        <a href="{{ url_for('download_report') }}" class="btn btn-outline-success btn-sm mb-2" role="button" target="_blank">
+          Download Last Report (PDF)
+        </a>
+      </div>
     </div>
+    
+    <!-- Plot Ideas Section (only shown when plot ideas are available) -->
+    {% if session.get('plot_ideas') %}
+    <div class="plot-ideas mb-3">
+      <h6>Interactive Plot Ideas:</h6>
+      {% for idea in session.get('plot_ideas') %}
+      <button class="btn btn-outline-warning btn-sm me-2 mb-2">{{ idea }}</button>
+      {% endfor %}
+    </div>
+    {% endif %}
 
     <!-- Chat Input Form -->
     <form id="chatForm" method="post" action="{{ url_for('chat') }}">
