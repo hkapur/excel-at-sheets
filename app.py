@@ -11,6 +11,7 @@ from markupsafe import Markup
 from markdown import markdown
 from pathlib import Path
 from werkzeug.utils import secure_filename
+from flask import flash
 
 from helpers import (
     ask_about_spreadsheet,
@@ -85,55 +86,39 @@ def chat():
     chat_history = session.get("chat_history", [])
     file_path = session.get("file_path")
 
-    # --- Display last receipt result if available (RE-APPLIED AGAIN) --- 
+    # --- Display last receipt result if available ---
     last_receipt_result = session.pop('last_receipt_result', None)
     if last_receipt_result:
-         # Temporarily insert it into the history for rendering this one time
-         # It won't be saved back to the session unless another POST happens
-         if not chat_history or chat_history[-1].get('content') != last_receipt_result:
-              # Find the corresponding bot summary message and replace it
-              for i in range(len(chat_history) - 1, -1, -1):
-                   if chat_history[i].get('role') == 'bot' and chat_history[i].get('content').startswith("Successfully analyzed receipt"): 
-                        chat_history[i]['content'] = last_receipt_result
-                        break
-              else: # If no placeholder found (e.g., error during processing), append
-                   # Avoid appending if it's identical to the last message already
-                   if not chat_history or chat_history[-1].get('content') != last_receipt_result:
-                        chat_history.append({"role": "bot", "content": last_receipt_result})
-         # --- Add Logging --- 
-         print("--- Rendering /chat GET with last_receipt_result --- ")
-         # Find the message content actually being sent to template
-         final_bot_message = "[Could not find final bot message for logging]"
-         for msg in reversed(chat_history):
-             if msg.get('role') == 'bot':
-                 final_bot_message = msg.get('content', '[Bot message content missing]')
-                 break
-         print(f"Final Bot Message Content Rendered:\n{repr(final_bot_message)}")
-         print("-------------------------------------------------")
-         # --- End Logging ---
-    # --- End Display Logic --- 
+        if not chat_history or chat_history[-1].get('content') != last_receipt_result:
+            for i in range(len(chat_history) - 1, -1, -1):
+                if chat_history[i].get('role') == 'bot' and chat_history[i].get('content').startswith("Successfully analyzed receipt"):
+                    chat_history[i]['content'] = last_receipt_result
+                    break
+            else:
+                chat_history.append({"role": "bot", "content": last_receipt_result})
+        print("--- Rendering /chat GET with last_receipt_result ---")
+        for msg in reversed(chat_history):
+            if msg.get('role') == 'bot':
+                print(f"Final Bot Message Content Rendered:\n{repr(msg.get('content', ''))}")
+                break
+        print("-------------------------------------------------")
 
-    # Original logic: If no excel file path, redirect to upload (RE-APPLIED LOGIC AGAIN)
+    # ✅ FIX: Render chat UI even if file_path is None (PDF mode) but chat exists
     if not file_path or not os.path.exists(file_path):
-        # If we just processed a receipt (file_path is None), render without redirect
         if file_path is None:
-             print("Rendering chat page without active Excel file.")
-             dynamic_prompts = [] # No prompts without excel file
-             original_filename = None
-             file_uploaded_state = bool(session.get("chat_history")) 
-             return render_template(
-                  "index.html", 
-                  file_uploaded=file_uploaded_state, 
-                  chat_history=chat_history, 
-                  filename=original_filename, 
-                  dynamic_prompts=dynamic_prompts
-             )
-        else: # file_path exists but file is gone - redirect
-             print("File path exists in session but not on disk, redirecting to upload.")
-        return redirect(url_for("upload_file"))
+            print("Rendering chat page without active Excel file.")
+            return render_template(
+                "index.html",
+                file_uploaded=bool(chat_history),
+                chat_history=chat_history,
+                filename=session.get("original_filename"),
+                dynamic_prompts=[]
+            )
+        else:
+            print("File path exists in session but not on disk, redirecting to upload.")
+            return redirect(url_for("upload_file"))
 
-    # --- Existing POST/GET logic for Excel file follows ---
-    # (This part is now only reached if file_path points to a valid Excel file)
+    # --- Handle POST message ---
     if request.method == "POST":
         if 'question' not in request.form:
             return redirect(url_for("chat"))
@@ -195,6 +180,7 @@ def chat():
         session["chat_history"] = chat_history
         return redirect(url_for("chat"))
 
+    # --- Default GET render (after Excel upload or chat POST) ---
     original_filename = session.get("original_filename")
     dynamic_prompts = []
     try:
@@ -417,6 +403,12 @@ def download_report():
         return response
     else:
         return "Error generating PDF.", 500
+
+@app.route("/clear_chat", methods=["POST"])
+def clear_chat():
+    session.pop("chat_history", None)
+    flash("Chat history cleared.")
+    return redirect(url_for("chat"))
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
