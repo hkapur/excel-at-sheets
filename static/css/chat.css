@@ -14,6 +14,7 @@ body {
   border-radius: 12px;
   height: 500px;
   overflow-y: auto;
+  scroll-behavior: smooth;
 }
 
 .bubble {
@@ -64,8 +65,8 @@ body {
 /* --- Suggested Prompts Styling --- */
 .suggested-prompts {
   display: flex;
-  flex-wrap: wrap; /* Allow buttons to wrap to next line */
-  justify-content: flex-start; /* Align buttons to the start */
+  flex-wrap: wrap;
+  justify-content: flex-start;
   padding: 5px 0;
 }
 
@@ -76,18 +77,18 @@ body {
 }
 
 .suggested-prompts button:hover {
-  background-color: #3a3a3a; /* Slightly lighter background on hover */
+  background-color: #3a3a3a;
 }
 /* --- End Suggested Prompts Styling --- */
 
 /* --- Current File Info Styling --- */
 .current-file-info {
-  background-color: #2c2c2c; /* Similar to bot bubble */
+  background-color: #2c2c2c;
   padding: 8px 15px;
   border-radius: 8px;
   font-size: 0.9rem;
-  color: #ccc; /* Lighter text */
-  display: inline-block; /* Don't take full width */
+  color: #ccc;
+  display: inline-block;
   max-width: 100%;
 }
 
@@ -96,13 +97,29 @@ body {
 }
 
 .current-file-info .filename strong {
-  color: #eee; /* Slightly brighter for filename */
+  color: #eee;
 }
 /* --- End Current File Info Styling --- */
 
+/* --- Upload Overlay Spinner Styling --- */
+.upload-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(18, 18, 18, 0.8);
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 12px;
+}
+/* --- End Upload Overlay Spinner Styling --- */
+
 /* --- Plot Ideas Styling --- */
 .plot-ideas {
-  background-color: #2d2d3d; /* Slightly different background from prompts */
+  background-color: #2d2d3d;
   padding: 10px 15px;
   border-radius: 10px;
   margin-top: 10px;
