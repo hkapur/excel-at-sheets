@@ -23,6 +23,15 @@ body {
   margin-bottom: 12px;
   line-height: 1.5;
   white-space: pre-line;
+  word-wrap: break-word;
+}
+
+.bubble img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin-top: 10px;
+  border-radius: 8px;
 }
 
 .bubble.user {
@@ -51,3 +60,42 @@ body {
 #loader {
   display: none;
 }
+
+/* --- Suggested Prompts Styling --- */
+.suggested-prompts {
+  display: flex;
+  flex-wrap: wrap; /* Allow buttons to wrap to next line */
+  justify-content: flex-start; /* Align buttons to the start */
+  padding: 5px 0;
+}
+
+.suggested-prompts button {
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.suggested-prompts button:hover {
+  background-color: #3a3a3a; /* Slightly lighter background on hover */
+}
+/* --- End Suggested Prompts Styling --- */
+
+/* --- Current File Info Styling --- */
+.current-file-info {
+  background-color: #2c2c2c; /* Similar to bot bubble */
+  padding: 8px 15px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: #ccc; /* Lighter text */
+  display: inline-block; /* Don't take full width */
+  max-width: 100%;
+}
+
+.current-file-info .file-icon {
+  margin-right: 8px;
+}
+
+.current-file-info .filename strong {
+  color: #eee; /* Slightly brighter for filename */
+}
+/* --- End Current File Info Styling --- */
