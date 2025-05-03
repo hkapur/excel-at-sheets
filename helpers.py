@@ -488,6 +488,12 @@ Return the results as a list of objects. If a field is not found for a specific 
             if parsed_data.receipts:
                 # Convert each ReceiptDetails object in the list to a dict
                 list_of_dicts = [receipt.dict() for receipt in parsed_data.receipts]
+                # --- Add Logging Here ---
+                print("--- Parsed Receipt Dicts (before DataFrame) ---")
+                import pprint
+                pprint.pprint(list_of_dicts)
+                print("---------------------------------------------")
+                # --- End Logging ---
                 df = pd.DataFrame(list_of_dicts)
                 print("Converted list of parsed receipts to DataFrame.")
             else:
@@ -603,29 +609,39 @@ def _plot_scatter(df, col1_name, col2_name, chart_path):
 
 # ========= Receipt Analysis Helpers ==========
 
-def categorize_receipts(receipts):
-    """Uses LLM to assign a category to each receipt based on vendor."""
-    system = "You are an expense categorization assistant."
-    user = "Categorize each receipt into a spending category. Common categories: Food, Transport, Shopping, Utilities, Entertainment, Other.\n\n"
-    user += "Return the result as JSON list with: vendor, total, category.\n\n"
+def categorize_receipts(receipts_with_std_date):
+    """Uses LLM to assign a category to each receipt based on vendor.
+       Expects input dicts to have 'vendor', 'total', and 'date' (standardized).
+       Returns a list of dicts including 'vendor', 'total', 'date', and 'category'."""
+    if not receipts_with_std_date:
+        return []
+        
+    system = "You are an expense categorization assistant." 
+    # Updated prompt to specify expected input/output including date
+    user = "Categorize each receipt into a spending category. Common categories: Food, Transport, Shopping, Utilities, Entertainment, Other.\n"
+    user += "Each item has Vendor, Total, and Date.\n"
+    user += "Return the result as JSON list with: vendor, total, date, category.\n\n"
 
-    for r in receipts:
-        user += f"- Vendor: {r['vendor']}, Total: {r['total']}\n"
+    for r in receipts_with_std_date:
+        # Include date in the info passed to LLM, although categorization is mainly by vendor
+        user += f"- Vendor: {r.get('vendor', 'N/A')}, Total: {r.get('total', 'N/A')}, Date: {r.get('date', 'N/A')}\n"
 
+    # Updated example output to include date
     example = """
 Example Output:
 [
-  {"vendor": "Starbucks", "total": 12.5, "category": "Food"},
-  {"vendor": "Amazon", "total": 59.99, "category": "Shopping"}
+  {"vendor": "Starbucks", "total": 12.50, "date": "2024-10-20", "category": "Food"},
+  {"vendor": "Amazon", "total": 59.99, "date": "2024-10-21", "category": "Shopping"}
 ]
 """
+    print(f"Sending {len(receipts_with_std_date)} receipts to LLM for categorization...")
     try:
         from langchain.schema import SystemMessage, HumanMessage
         response = llm.invoke([SystemMessage(content=system), HumanMessage(content=user + example)])
 
-        print("--- LLM raw output ---")
+        print("--- LLM raw categorization output ---")
         print(repr(response.content))
-        print("-----------------------")
+        print("-----------------------------------")
 
         # Strip Markdown code block
         cleaned = response.content.strip()
@@ -633,33 +649,127 @@ Example Output:
             cleaned = cleaned[len("```json"):].strip()
         if cleaned.endswith("```"):
             cleaned = cleaned[:-3].strip()
+        
+        # Attempt to repair potentially truncated JSON
+        if not cleaned.endswith("]"):
+            if cleaned.rfind('}') > cleaned.rfind('{'): # Simple check for dangling comma maybe
+                cleaned = cleaned[:cleaned.rfind('}')+1] + "]"
+                print("Attempted basic JSON repair (closing bracket).")
+            else: 
+                 print("Warning: JSON from LLM might be incomplete.")
 
         import json
-        return json.loads(cleaned)
+        categorized_list = json.loads(cleaned)
+        print(f"Successfully parsed {len(categorized_list)} categorized items from LLM.")
+        return categorized_list
+    except json.JSONDecodeError as json_err:
+        print(f"Error decoding JSON from LLM categorization: {json_err}")
+        print(f"Failed JSON string: {cleaned}")
+        # Fallback: return original list but add an 'Error' category?
+        for r in receipts_with_std_date:
+            r['category'] = "Categorization Failed"
+        return receipts_with_std_date 
     except Exception as e:
         print(f"Error categorizing receipts: {e}")
-        return []
+        # Fallback
+        for r in receipts_with_std_date:
+            r['category'] = "Categorization Error"
+        return receipts_with_std_date
+
+def create_transaction_table(categorized_data):
+    """Creates a markdown table from the categorized receipt data."""
+    if not categorized_data:
+        return "No transaction data available to create table."
+
+    # Convert list of dicts to DataFrame
+    df = pd.DataFrame(categorized_data)
+    
+    # Ensure required columns exist, add if missing
+    required_cols = ['vendor', 'date', 'category', 'total']
+    for col in required_cols:
+        if col not in df.columns:
+            df[col] = None # Or some default value
+            
+    # Select and rename columns for the final table
+    df_table = df[['vendor', 'date', 'category', 'total']].copy()
+    df_table.rename(columns={
+        'vendor': 'Vendor',
+        'date': 'Date', 
+        'category': 'Category',
+        'total': 'Amount ($)'
+    }, inplace=True)
+    
+    # Format the Amount column potentially
+    # df_table['Amount ($)'] = pd.to_numeric(df_table['Amount ($)'], errors='coerce').fillna(0).map('{:.2f}'.format)
+
+    print(f"Creating markdown table for {len(df_table)} transactions.")
+    try:
+        # Generate markdown table, aligning numeric column right
+        # Note: Requires pandas >= 1.0.0 for floatfmt
+        # Note: Requires tabulate package to be installed
+        markdown_table = df_table.to_markdown(index=False, floatfmt=".2f") 
+        return markdown_table
+    except Exception as e:
+        print(f"Error generating markdown table: {e}")
+        return "Error generating transaction table."
 
 def plot_expense_pie_chart(categorized_data, save_path):
-    """Generates a pie chart of expenses grouped by category."""
+    """Generates a pie chart of expenses grouped by category, showing amount and percentage."""
     import pandas as pd
     import matplotlib.pyplot as plt
 
+    if not categorized_data:
+        print("Plot Error: No categorized data provided for pie chart.")
+        return False
+
     try:
         df = pd.DataFrame(categorized_data)
-        grouped = df.groupby("category")["total"].sum()
+        # Ensure total is numeric
+        df['total'] = pd.to_numeric(df['total'], errors='coerce')
+        df.dropna(subset=['total'], inplace=True)
 
-        plt.figure(figsize=(8, 6))
-        grouped.plot.pie(autopct='%1.1f%%', startangle=90)
-        plt.title("Expenses by Category")
-        plt.ylabel("")
-        plt.tight_layout()
+        if df.empty:
+            print("Plot Error: No valid numeric expense data found after cleaning.")
+            return False
+            
+        grouped = df.groupby("category")["total"].sum()
+        total = grouped.sum() # Calculate total for label formatting
+        
+        # Custom autopct function to display value and percentage
+        def make_autopct(values):
+            def my_autopct(pct):
+                # --- Debugging Removed --- 
+                if pct is None or total is None or total == 0:
+                     return '' # Avoid division by zero or errors with None
+                try:
+                    absolute = (float(pct) / 100.0) * float(total)
+                    # Use SPACE instead of NEWLINE in format string
+                    formatted_string = f"${absolute:.2f} ({pct:.1f}%)" 
+                    # --- Debugging Removed --- 
+                    return formatted_string
+                except (ValueError, TypeError) as e:
+                     print(f"    Error formatting autopct label: {e}. Pct: {pct}")
+                     # Fallback to just percentage on error
+                     try:
+                         return f'{float(pct):.1f}%' 
+                     except:
+                         return '' # Give up if pct is totally invalid
+            return my_autopct
+
+        plt.figure(figsize=(8, 8))
+        # Use the custom function for autopct
+        grouped.plot.pie(autopct=make_autopct(grouped.values), startangle=90, pctdistance=0.85) 
+        plt.title("Expenses by Category", pad=20) # Added padding to title
+        plt.ylabel("") # Keep Y label empty for pie charts
+        # plt.tight_layout() # Can sometimes interfere with pie labels, test if needed
         plt.savefig(save_path)
         plt.close()
-        print(f"Pie chart saved to {save_path}")
+        print(f"Pie chart with amount and percentage saved to {save_path}")
         return True
     except Exception as e:
         print(f"Error generating pie chart: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def generate_expense_summary(categorized_data):
@@ -682,3 +792,83 @@ Write a short summary of the user's spending pattern. Be concise and professiona
     except Exception as e:
         print(f"Error generating summary: {e}")
         return "Error generating summary."
+
+def generate_financial_analysis(categorized_data, period_str, total_spent_str, num_transactions):
+    """LLM generates a structured financial analysis with summary, observations, and suggestions."""
+    import pandas as pd
+    print("Generating structured financial analysis...")
+    
+    if not categorized_data:
+        return "Could not generate analysis: No categorized data provided."
+        
+    try:
+        df = pd.DataFrame(categorized_data)
+        df['total'] = pd.to_numeric(df['total'], errors='coerce')
+        df.dropna(subset=['total'], inplace=True)
+
+        if df.empty:
+            return "Could not generate analysis: No valid expense data found after processing."
+
+        # Calculate category totals and percentages for the prompt
+        category_summary = df.groupby("category")["total"].sum()
+        total_calculated = category_summary.sum() # Use sum from grouped data for consistency
+        category_percentages = (category_summary / total_calculated * 100).round(1)
+        
+        summary_lines = []
+        for category, total in category_summary.items():
+            percentage = category_percentages.get(category, 0)
+            summary_lines.append(f"{category}: ${total:.2f} ({percentage}%)")
+        category_summary_text = "\n".join(summary_lines)
+
+        # --- New Structured Prompt ---
+        system_prompt = """You are a financial analyst assistant. 
+Analyze the user's spending based on the provided summary. 
+A transaction table and a pie chart visualizing these categories are also shown to the user separately.
+
+Generate a response strictly following this structure:
+
+### Category Summary
+[List each category, its total amount, and its percentage of total spending, like: 'Food: $44.37 (14.6%)']
+
+### Observations
+[Provide 2-3 bullet points observing spending patterns, like high spending areas or frequency.]
+
+### Recommendations
+[Provide 2-3 actionable, specific bullet-point recommendations for managing expenses or saving based *only* on the observed patterns.]
+
+Maintain a helpful, non-judgmental tone. Be concise.
+"""
+        
+        # Include context passed from app.py (period, total, count) 
+        # and the calculated summary for the LLM to structure its response
+        user_prompt = f"""
+Spending Period: {period_str}
+Total Expenses: {total_spent_str} across {num_transactions} transactions.
+
+Category Breakdown:
+{category_summary_text}
+
+Please generate the structured financial analysis (Category Summary, Observations, Recommendations) based ONLY on this data.
+"""
+        # --- End New Prompt ---
+
+        from langchain.schema import SystemMessage, HumanMessage
+        response = llm.invoke([SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)])
+        analysis_text = response.content.strip()
+        
+        # Basic validation: Check if expected headers are present
+        if "Category Summary" not in analysis_text or "Observations" not in analysis_text or "Recommendations" not in analysis_text:
+             print("Warning: LLM output might not follow the requested structure.")
+             print(f"LLM Raw Output: {analysis_text}")
+             # Optionally prepend a note or return a fallback message
+             analysis_text = "*LLM failed to generate fully structured analysis. Raw output below:*\n\n" + analysis_text
+        else:
+            print("Generated structured analysis successfully.")
+
+        return analysis_text
+        
+    except Exception as e:
+        print(f"Error generating structured financial analysis: {e}")
+        import traceback
+        traceback.print_exc()
+        return "Error generating financial analysis report."
