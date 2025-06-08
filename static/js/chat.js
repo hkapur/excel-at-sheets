@@ -51,7 +51,7 @@ document.addEventListener("DOMContentLoaded", function () {
   if (plotIdeasBtn) {
     plotIdeasBtn.addEventListener("click", function(e) {
       e.preventDefault();
-      window.open('/product_sales_plot', '_blank');
+      window.open('/mta_ridership_plot', '_blank');
     });
   }
 

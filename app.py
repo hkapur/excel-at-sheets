@@ -414,84 +414,54 @@ def download_report():
     else:
         return "Error generating PDF.", 500
 
-@app.route("/product_sales_plot")
-def product_sales_plot():
-    """Renders a page with a line chart showing dollar sales of three products by month."""
-    file_path = session.get("file_path")
-
-    if not file_path or not os.path.exists(file_path):
-        return redirect(url_for("upload_file"))
-
+@app.route("/mta_ridership_plot")
+def mta_ridership_plot():
+    """Renders a page with a line chart showing MTA ridership by service type over time."""
     try:
-        # Load the Excel file using pandas
-        df = pd.read_excel(file_path)
+        # Load the MTA Excel file
+        df = pd.read_excel('MTA_Daily_Ridership.xlsx')
 
-        # Basic data validation
-        required_columns = ['Month', 'Product', 'Dollar_Sales']
+        # Basic data validation and preparation
+        date_column = df.columns[0]  # Assuming first column is date
+        service_columns = df.columns[1:]  # Assuming remaining columns are service types
 
-        # Check if the required columns exist or try to find similar ones
-        if not all(col in df.columns for col in required_columns):
-            # Try finding similar column names (a simple approach)
-            column_mapping = {}
-            for req_col in required_columns:
-                for col in df.columns:
-                    # Simple matching logic - can be improved
-                    if req_col.lower() in col.lower():
-                        column_mapping[req_col] = col
-                        break
+        # Convert date column to datetime if it's not already
+        df[date_column] = pd.to_datetime(df[date_column])
+        
+        # Filter data up to 2021-07-12
+        max_date = pd.to_datetime('2021-07-12')
+        df = df[df[date_column] <= max_date]
+        
+        # Sort by date
+        df = df.sort_values(date_column)
 
-            # If found mappings, rename the columns
-            if len(column_mapping) == len(required_columns):
-                df.rename(columns=column_mapping, inplace=True)
-            else:
-                # If still don't have all columns, generate sample data
-                print("Required columns not found in Excel file. Using sample data.")
-                months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-                products = ['Smartphone', 'Laptop', 'Tablet']
-                sample_data = []
+        # Replace NaN values with 0
+        df[service_columns] = df[service_columns].fillna(0)
 
-                import random
-                for month in months:
-                    for product in products:
-                        sample_data.append({
-                            'Month': month,
-                            'Product': product,
-                            'Dollar_Sales': random.randint(5000, 20000)
-                        })
-
-                df = pd.DataFrame(sample_data)
-
-        # Get unique months and products
-        months = df['Month'].unique().tolist()
-
-        # Select top 3 products by total sales
-        top_products = df.groupby('Product')['Dollar_Sales'].sum().nlargest(3).index.tolist()
-
-        # Prepare data structure for Chart.js
-        sales_data = []
-        for product in top_products:
-            product_data = []
-            for month in months:
-                # Get sales for this product and month
-                sales = df[(df['Product'] == product) & (df['Month'] == month)]['Dollar_Sales'].sum()
-                # Convert NumPy types to native Python types
-                product_data.append(float(sales))
-            sales_data.append(product_data)
+        # Prepare data for Chart.js
+        dates = df[date_column].dt.strftime('%Y-%m-%d').tolist()
+        service_types = service_columns.tolist()
+        
+        # Prepare ridership data for each service type
+        ridership_data = []
+        for service in service_types:
+            service_data = df[service].tolist()
+            ridership_data.append(service_data)
 
         # Convert to JSON for the template
-        sales_data_json = json.dumps(sales_data)
-        months_json = json.dumps(months)
-        products_json = json.dumps(top_products)
+        ridership_data_json = json.dumps(ridership_data)
+        dates_json = json.dumps(dates)
+        service_types_json = json.dumps(service_types)
 
         return render_template(
             'plot_page.html',
-            sales_data=sales_data_json,
-            months=months_json,
-            product_names=products_json
+            ridership_data=ridership_data_json,
+            dates=dates_json,
+            service_types=service_types_json
         )
 
     except Exception as e:
-        print(f"Error generating sales plot: {e}")
+        print(f"Error generating MTA ridership plot: {e}")
         import traceback
         traceback.print_exc()
         # Return a simple error page

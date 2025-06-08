@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Product Sales Chart</title>
+  <title>MTA Daily Ridership Analysis</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <!-- Bootstrap 5 -->
@@ -48,11 +48,11 @@
 </head>
 <body>
   <div class="container">
-    <h1 class="text-center mb-4">Product Sales Analysis</h1>
+    <h1 class="text-center mb-4">MTA Daily Ridership Analysis</h1>
 
     <div class="chart-container">
-      <h3>Monthly Dollar Sales by Product</h3>
-      <canvas id="salesChart"></canvas>
+      <h3>Daily Ridership by Service Type</h3>
+      <canvas id="ridershipChart"></canvas>
 
       <!-- Zoom Controls -->
       <div class="zoom-controls">
@@ -77,9 +77,9 @@
           <div class="card-body">
             <h5 class="card-title">Chart Details</h5>
             <p class="card-text">
-              This chart displays the monthly dollar sales for three key products from the 2024 Electronics Sales data.
-              The line chart format helps visualize sales trends over time, making it easier to identify seasonal patterns
-              and compare product performance.
+              This chart displays the daily ridership trends for different MTA services. The line chart format helps visualize
+              ridership patterns over time, making it easier to identify daily, weekly, and seasonal patterns in
+              public transportation usage.
             </p>
             <div class="alert alert-info">
               <strong>Interactive Features:</strong> Use the zoom controls to examine specific time periods.
@@ -92,36 +92,38 @@
   </div>
 
   <script>
-    // Sales data will be injected from the Flask route
-    const salesData = {{ sales_data|safe }};
-    const months = {{ months|safe }};
-    const productNames = {{ product_names|safe }};
+    // Data will be injected from the Flask route
+    const ridershipData = {{ ridership_data|safe }};
+    const dates = {{ dates|safe }};
+    const serviceTypes = {{ service_types|safe }};
 
-    // Random colors for the lines
+    // Colors for different service types
     const colors = [
-      'rgba(255, 99, 132, 1)',
-      'rgba(54, 162, 235, 1)',
-      'rgba(255, 206, 86, 1)'
+      'rgba(255, 99, 132, 1)',    // Red
+      'rgba(54, 162, 235, 1)',    // Blue
+      'rgba(75, 192, 192, 1)',    // Teal
+      'rgba(255, 206, 86, 1)',    // Yellow
+      'rgba(153, 102, 255, 1)'    // Purple
     ];
 
     // Prepare datasets for Chart.js
-    const datasets = productNames.map((product, index) => {
+    const datasets = serviceTypes.map((service, index) => {
       return {
-        label: product,
-        data: salesData[index],
-        borderColor: colors[index],
-        backgroundColor: colors[index].replace('1)', '0.1)'),
+        label: service,
+        data: ridershipData[index],
+        borderColor: colors[index % colors.length],
+        backgroundColor: colors[index % colors.length].replace('1)', '0.1)'),
         tension: 0.1,
         borderWidth: 2
       };
     });
 
     // Create the chart
-    const ctx = document.getElementById('salesChart').getContext('2d');
-    const salesChart = new Chart(ctx, {
+    const ctx = document.getElementById('ridershipChart').getContext('2d');
+    const ridershipChart = new Chart(ctx, {
       type: 'line',
       data: {
-        labels: months,
+        labels: dates,
         datasets: datasets
       },
       options: {
@@ -129,14 +131,14 @@
         plugins: {
           title: {
             display: true,
-            text: 'Monthly Dollar Sales by Product (2024)'
+            text: 'Daily MTA Ridership by Service Type'
           },
           tooltip: {
             mode: 'index',
             intersect: false,
             callbacks: {
               label: function(context) {
-                return context.dataset.label + ': $' + context.raw.toLocaleString();
+                return context.dataset.label + ': ' + context.raw.toLocaleString() + ' riders';
               }
             }
           },
@@ -168,18 +170,18 @@
             beginAtZero: true,
             title: {
               display: true,
-              text: 'Dollar Sales ($)'
+              text: 'Number of Riders'
             },
             ticks: {
               callback: function(value) {
-                return '$' + value.toLocaleString();
+                return value.toLocaleString();
               }
             }
           },
           x: {
             title: {
               display: true,
-              text: 'Month'
+              text: 'Date'
             }
           }
         }
@@ -188,15 +190,15 @@
 
     // Connect zoom control buttons
     document.getElementById('zoom-in').addEventListener('click', () => {
-      salesChart.zoom(1.1);
+      ridershipChart.zoom(1.1);
     });
 
     document.getElementById('zoom-out').addEventListener('click', () => {
-      salesChart.zoom(0.9);
+      ridershipChart.zoom(0.9);
     });
 
     document.getElementById('reset-zoom').addEventListener('click', () => {
-      salesChart.resetZoom();
+      ridershipChart.resetZoom();
     });
   </script>
 </body>
